@@ -148,26 +148,65 @@ Module FingerTrees.
   Arguments nil_l {S} {A}.
   Arguments cons_l {S} {A} _ _.
 
-  Fixpoint view_l {A:Type} (tr:fingertree A) : View_l fingertree A :=
+  Fixpoint view_l {A:Type} (tr:fingertree A) {struct tr} : View_l fingertree A :=
     match tr with
     | empty => nil_l
     | single x => cons_l x empty
-    | deep (x::pr') m sf => cons_l x (deep_l (tl (x::pr')) m sf)
-    | deep _ _ _ => nil_l (* nonsense case *)
-    end
-    with deep_l {A:Type} (pr:digit A) m (sf:digit A) := match pr with
-                          | [] => match view_l m with
-                                 | nil_l => toTree sf
-                                 | cons_l a m' => deep (toList a) m' sf
-                                 end
-                          | _  => deep pr m sf
-                          end.
+    | deep (x::pr) m sf =>
+      let tail := match pr with
+                 | [] => match view_l m with
+                        | nil_l => toTree sf
+                        | cons_l a m' => deep (toList a) m' sf
+                        end
+                 | _ => deep pr m sf
+                 end
+      in
+      cons_l x tail
+    | deep [] m sf => nil_l (* nonsense case *)
+    end.
 
+  Definition isEmptyb {A:Type} (tr:fingertree A) : bool :=
+    match view_l tr with
+    | nil_l => true
+    | cons_l _ _ => false
+    end.
 
+  Definition isEmpty {A:Type} (tr:fingertree A) : Prop :=
+    match view_l tr with
+    | nil_l => True
+    | cons_l _ _ => False
+    end.
 
+  Lemma toTreeEmpty : forall (A : Type), @isEmpty A (toTree []).
+  Proof.
+    intros. simpl. unfold isEmpty. destruct (view_l empty) eqn:Heq.
+    - apply I.
+    - inversion Heq.
+  Qed.
 
+  Lemma addl_not_empty : forall (A : Type) (tr : fingertree A) x, ~(addl x tr = empty).
+  Proof.
+    intros A tr x H. induction tr; inversion H.
+    do 5 (destruct d; [inversion H1|]).
+    inversion H.
+  Qed.
 
+  Lemma addr_not_empty : forall (A : Type) (tr : fingertree A) x, ~(addr tr x = empty).
+    intros A tr x H. induction tr; inversion H.
+    do 5 (destruct d0; [inversion H1|]).
+    inversion H.
+  Qed.
 
+  (* should reuse lemmas from above, but cant figure out how right now
+     (in my defense, I am a bit drunk)
+  *)
+  Lemma addl_not_nil : forall (A : Type) (tr : fingertree A) x,
+      ~(view_l (addl x tr) = nil_l).
+  Proof.
+    intros A tr x H. induction tr; inversion H.
+    do 5 (destruct d; [inversion H1|]).
+    inversion H.
+  Qed.
 
 End FingerTrees.
 
