@@ -40,7 +40,7 @@ Module FingerTrees.
       reducel := fun _ _ fn z xs => List.fold_left fn xs z;
     |}.
 
-  Definition toList {F: Type -> Type} {r: reduce F} {A : Type} (s : F A) : list A :=
+  Definition to_list {F: Type -> Type} {r: reduce F} {A : Type} (s : F A) : list A :=
     reducer (cons (A:=A)) s nil.
 
   Inductive node (A:Type) : Type :=
@@ -57,7 +57,16 @@ Module FingerTrees.
   Arguments zero {A} _.
   Arguments succ {A} _.
 
-  Definition digit (A:Type) := list A.
+  Inductive digit (A:Type) : Type :=
+  | one : A -> digit A
+  | two : A -> A -> digit A
+  | three : A -> A -> A -> digit A
+  | four : A -> A -> A -> A -> digit A.
+
+  Arguments one {A} _.
+  Arguments two {A} _ _.
+  Arguments three {A} _ _ _.
+  Arguments four {A} _ _ _ _.
 
   Inductive fingertree (A:Type) : Type := 
   | empty : fingertree A
@@ -80,17 +89,33 @@ Module FingerTrees.
                                   end;
       |}.
 
+  Instance digit_reduce : reduce digit :=
+    {|
+      reducer := fun _ _ op dg z => match dg with
+                                 | one a => op a z
+                                 | two a b => op a (op b z)
+                                 | three a b c => op a (op b (op c z))
+                                 | four a b c d => op a (op b (op c (op d z)))
+                                 end;
+      reducel := fun _ _ op z dg => match dg with
+                                 | one a => op z a
+                                 | two a b => op (op z a) b
+                                 | three a b c => op (op (op z a) b) c
+                                 | four a b c d => op (op (op (op z a) b) c) d
+                                 end;
+    |}.
 
   Fixpoint fingertree_reducer {A:Type} {B:Type}
              (op: A -> B -> B) (tr : fingertree A) (z : B) : B :=
-                   match tr with
-                   | empty => z
-                   | single x => op x z
-                   | deep pr m sf =>
-                     let op' := reducer op in
-                     let op'' := fingertree_reducer (reducer op) in
-                     op' pr (op'' m (op' sf z))
-                   end.
+      match tr with
+      | empty => z
+      | single x => op x z
+      | deep pr m sf =>
+        let op' := reducer op in
+        let op'' := fingertree_reducer (reducer op) in
+        op' pr (op'' m (op' sf z))
+      end.
+
   Fixpoint fingertree_reducel {A:Type} {B:Type}
            (op: B -> A -> B) (z : B) (tr : fingertree A) : B :=
       match tr with
@@ -111,18 +136,22 @@ Module FingerTrees.
   Fixpoint addl {A:Type} (a:A) (tr:fingertree A) : fingertree A  :=
     match tr with
     | empty => single a
-    | single b => deep [a] empty [b]
-    | deep [b;c;d;e] m sf => deep [a;b] (addl (node3 c d e) m) sf
-    | deep pr m sf => deep (a :: pr) m sf
+    | single b => deep (one a) empty (one b)
+    | deep (four b c d e) m sf => deep (two a b) (addl (node3 c d e) m) sf
+    | deep (three b c d) m sf => deep (four a b c d) m sf
+    | deep (two b c) m sf => deep (three a b c) m sf
+    | deep (one b) m sf => deep (two a b) m sf
     end.
 
 
   Fixpoint addr {A:Type} (tr:fingertree A) (a:A) : fingertree A  :=
     match tr with
     | empty => single a
-    | single b => deep [b] empty [a]
-    | deep pr m [e;d;c;b] => deep pr (addr m (node3 e d c)) [b;a]
-    | deep pr m sf => deep pr m (sf ++ [a])
+    | single b => deep (one b) empty (one a)
+    | deep pr m (four e d c b) => deep pr (addr m (node3 e d c)) (two b a)
+    | deep pr m (three e c b) => deep pr m (four e c b a)
+    | deep pr m (two c b) => deep pr m (three c b a)
+    | deep pr m (one b) => deep pr m (two b a)
     end.
 
   Notation "x <| t" := (addl x t)
@@ -138,7 +167,7 @@ Module FingerTrees.
     fingertree A -> F A -> fingertree A :=
     reducel addr.
 
-  Definition toTree {F:Type -> Type} {A:Type} {r:reduce F} (s:F A) :
+  Definition to_tree {F:Type -> Type} {A:Type} {r:reduce F} (s:F A) :
     fingertree A := addl' s empty.
 
   Inductive View_l (S:Type -> Type) (A:Type): Type :=
@@ -148,38 +177,42 @@ Module FingerTrees.
   Arguments nil_l {S} {A}.
   Arguments cons_l {S} {A} _ _.
 
+  Fixpoint to_digit {A:Type} (nd:node A) : digit A :=
+    match nd with
+    | node2 a b => two a b
+    | node3 a b c => three a b c
+    end.
+
   Fixpoint view_l {A:Type} (tr:fingertree A) {struct tr} : View_l fingertree A :=
     match tr with
     | empty => nil_l
     | single x => cons_l x empty
-    | deep (x::pr) m sf =>
-      let tail := match pr with
-                 | [] => match view_l m with
-                        | nil_l => toTree sf
-                        | cons_l a m' => deep (toList a) m' sf
-                        end
-                 | _ => deep pr m sf
-                 end
-      in
-      cons_l x tail
-    | deep [] m sf => nil_l (* nonsense case *)
+    | deep (one x) m sf =>
+      let tail := match view_l m with
+                  | nil_l => to_tree sf
+                  | cons_l a m' => deep (to_digit a) m' sf
+                  end
+      in cons_l x tail
+    | deep (two x y) m sf => cons_l x (deep (one x) m sf)
+    | deep (three x y z) m sf => cons_l x (deep (two x y) m sf)
+    | deep (four x y z u) m sf => cons_l x (deep (three x y u) m sf)
     end.
 
-  Definition isEmptyb {A:Type} (tr:fingertree A) : bool :=
+  Definition is_emptyb {A:Type} (tr:fingertree A) : bool :=
     match view_l tr with
     | nil_l => true
     | cons_l _ _ => false
     end.
 
-  Definition isEmpty {A:Type} (tr:fingertree A) : Prop :=
+  Definition is_empty {A:Type} (tr:fingertree A) : Prop :=
     match view_l tr with
     | nil_l => True
     | cons_l _ _ => False
     end.
 
-  Lemma toTreeEmpty : forall (A : Type), @isEmpty A (toTree []).
+  Lemma to_tree_empty : forall (A : Type), @is_empty A (to_tree []).
   Proof.
-    intros. simpl. unfold isEmpty. destruct (view_l empty) eqn:Heq.
+    intros. simpl. unfold is_empty. destruct (view_l empty) eqn:Heq.
     - apply I.
     - inversion Heq.
   Qed.
@@ -187,14 +220,17 @@ Module FingerTrees.
   Lemma addl_not_empty : forall (A : Type) (tr : fingertree A) x, ~(addl x tr = empty).
   Proof.
     intros A tr x H. induction tr; inversion H.
-    do 5 (destruct d; [inversion H1|]).
-    inversion H.
+    destruct d; inversion H1.
+  Qed.
+
+  Lemma addl_not_2single : forall (A : Type) (x y z : A), ~(addl x (single y) = single z).
+  Proof.
+    intros A x y z H. simpl in H. inversion H.
   Qed.
 
   Lemma addr_not_empty : forall (A : Type) (tr : fingertree A) x, ~(addr tr x = empty).
     intros A tr x H. induction tr; inversion H.
-    do 5 (destruct d0; [inversion H1|]).
-    inversion H.
+    destruct d0; inversion H1.
   Qed.
 
   (* should reuse lemmas from above, but cant figure out how right now
@@ -204,9 +240,53 @@ Module FingerTrees.
       ~(view_l (addl x tr) = nil_l).
   Proof.
     intros A tr x H. induction tr; inversion H.
-    do 5 (destruct d; [inversion H1|]).
-    inversion H.
+    destruct d; inversion H1.
   Qed.
+
+  Definition head_l {A:Type} (a:A) (tr:fingertree A) : A :=
+    match view_l tr with
+    | nil_l => a
+    | cons_l x _ => x
+    end.
+
+  Definition tail_l {A:Type} (tr:fingertree A) : fingertree A :=
+    match view_l tr with
+    | nil_l => tr
+    | cons_l _ tl => tl
+    end.
+
+  Lemma fold_right_empty : forall {A : Type} (xs : list A),
+      fold_right addl empty xs = empty -> xs = [].
+  Proof.
+    induction xs.
+    - intros. reflexivity.
+    - intros. simpl in H. exfalso. eapply addl_not_empty. apply H.
+  Qed.
+
+  Lemma fold_right_single : forall {A : Type} (xs : list A) x,
+      fold_right addl empty xs = single x -> xs = [x].
+  Proof.
+    induction xs; [intros; inversion H|].
+    intros. simpl in H. destruct (fold_right addl empty xs) eqn:Heq.
+    - simpl in *. inversion H. rewrite (fold_right_empty _ Heq). reflexivity.
+    - exfalso. apply (addl_not_2single _ a a0 x H).
+    - simpl in H. destruct d; inversion H.
+  Qed.
+
+  Theorem to_tree_to_list_id : forall {A:Type} (xs : list A),
+      to_list (to_tree xs) = xs.
+  Proof.
+    intros. induction xs.
+    - reflexivity.
+    - simpl. destruct (fold_right addl empty xs) eqn:Hdest.
+      + unfold "<|". simpl. rewrite (fold_right_empty xs Hdest). reflexivity.
+      + simpl. rewrite (fold_right_single xs a0 Hdest). reflexivity.
+      + simpl. destruct d; simpl in IHxs; rewrite Hdest in IHxs;
+                 rewrite <- IHxs; simpl; try reflexivity.
+         do 2 (apply f_equal).
+        
+      
+
 
 End FingerTrees.
 
