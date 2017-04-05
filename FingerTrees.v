@@ -49,7 +49,7 @@ Module FingerTrees.
 
   Arguments node2 {A} _ _.
   Arguments node3 {A} _ _ _.
-
+  
   Inductive tree (A:Type) : Type :=
   | zero : A -> tree A
   | succ : tree (node A) -> tree A.
@@ -161,11 +161,11 @@ Module FingerTrees.
 
   Definition addl' {F: Type -> Type} {r:reduce F} {A:Type} :
     F A -> fingertree A -> fingertree A :=
-    reducer addl.
+      reducer addl.
 
   Definition addr' {F: Type -> Type} {r:reduce F} {A:Type} :
     fingertree A -> F A -> fingertree A :=
-    reducel addr.
+      reducel addr.
 
   Definition to_tree {F:Type -> Type} {A:Type} {r:reduce F} (s:F A) :
     fingertree A := addl' s empty.
@@ -183,7 +183,7 @@ Module FingerTrees.
     | node3 a b c => three a b c
     end.
 
-  Fixpoint view_l {A:Type} (tr:fingertree A) {struct tr} : View_l fingertree A :=
+  Fixpoint view_l {A:Type} (tr:fingertree A) : View_l fingertree A :=
     match tr with
     | empty => nil_l
     | single x => cons_l x empty
@@ -273,6 +273,46 @@ Module FingerTrees.
     - simpl in H. destruct d; inversion H.
   Qed.
 
+  Lemma view_l_addl : forall {A : Type} tr (x y : A) xs,
+      (view_l tr = cons_l x xs) -> view_l (addl y tr) = cons_l y (addl x xs).
+  Proof.
+    intros A tr. induction tr; intros.
+    - inversion H.
+    - inversion H. subst. simpl. reflexivity.
+    - simpl. 
+
+  Definition collapse_nodelist {A:Type} {F : Type -> Type} {r : reduce F} (xs : list (F A)) : list A :=
+    fold_right (fun nd l => to_list nd ++ l) [] xs.
+
+  Example collapse_nodelist_ex01 :
+    collapse_nodelist [node2 0 1; node3 2 3 4] = [0;1;2;3;4].
+  Proof. reflexivity. Qed.
+
+  Lemma to_list_deep : forall {A : Type} {F : Type -> Type} {rd : reduce digit} {rtr : reduce fingertree} 
+                         (m : fingertree (node A)) (pf sf : digit A),
+      to_list (deep pf m sf) = to_list pf ++ (collapse_nodelist (to_list m)) ++ to_list sf.
+  Proof.
+    intros A F rd rtr m pf sf. induction (deep pf m sf).
+    - simpl. unfold to_list. unfold reducer. unfold collapse_nodelist. simpl.
+    - simpl.
+    - simpl. unfold to_list. destruct pf, sf.
+      + rewrite app_assoc. unfold collapse_nodelist. simpl.
+  (* if you add an x to the left of a treduree tr and then convert it to a list, it is
+     the same as converting tr to a list and then consing x
+  *)
+  Lemma to_list_cons : forall {A : Type} (tr : fingertree A) xs x (op : A -> list A -> list A),
+      fingertree_reducer op (x <| tr) xs = op x (fingertree_reducer op tr xs).
+  Proof.
+    intros A tr. induction tr; intros; try reflexivity.
+    destruct d; try reflexivity.
+    replace (fingertree_reducer op (deep (x <| four a a0 a1 a2) tr d0) xs)
+            with op x (op a (op a0 (op a1 (op a2 (d
+    do 2 (apply f_equal).
+    rewrite IHtr.
+    - unfold fingertree_reducer. simpl. 
+      destruct d0.
+      + simpl. 
+
   Theorem to_tree_to_list_id : forall {A:Type} (xs : list A),
       to_list (to_tree xs) = xs.
   Proof.
@@ -283,7 +323,10 @@ Module FingerTrees.
       + simpl. rewrite (fold_right_single xs a0 Hdest). reflexivity.
       + simpl. destruct d; simpl in IHxs; rewrite Hdest in IHxs;
                  rewrite <- IHxs; simpl; try reflexivity.
-         do 2 (apply f_equal).
+        do 2 (apply f_equal). destruct d0.
+        *
+
+
         
       
 
