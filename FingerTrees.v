@@ -339,17 +339,19 @@ Module FingerTrees.
       apply f_equal. simpl in IHxs. assumption.
   Qed.
 
+  (* Adam *)
   Fixpoint append {A:Type}
            (tr1 : fingertree A) (tr2 : fingertree A) : fingertree A.
-  Proof. Admitted.
-
-  Fixpoint reverse {A: Type} (tr : fingertree A) : fingertree A.
   Proof. Admitted.
 
   Theorem tree_append {A:Type} (tr1 : fingertree A) (tr2 : fingertree A) :
     to_list (append tr1 tr2) = to_list tr1 ++ to_list tr2.
 
   Theorem tree_append_assoc {A:Type} ...
+
+  (* Oscar *)
+  Fixpoint reverse {A: Type} (tr : fingertree A) : fingertree A.
+  Proof. Admitted.
 
   Theorem tree_reverse {A : Type} (tr : fingertree A) :
     to_list (reverse tr) = rev (to_list tr).
