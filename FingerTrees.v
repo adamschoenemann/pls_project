@@ -210,6 +210,15 @@ Module FingerTrees.
     | cons_l _ _ => False
     end.
 
+  Lemma view_l_nil_empty : forall {A : Type} tr, @view_l A tr = nil_l <-> tr = empty.
+  Proof.
+    intros. split.
+    - intros. destruct tr; [reflexivity | inversion H |]. simpl in H.
+      destruct d, (view_l tr), d0; inversion H.
+    - intros. destruct tr; [reflexivity | inversion H |].
+      destruct d, (view_l tr), d0; inversion H.
+  Qed.
+
   Lemma to_tree_empty : forall (A : Type), @is_empty A (to_tree []).
   Proof.
     intros. simpl. unfold is_empty. destruct (view_l empty) eqn:Heq.
@@ -279,52 +288,56 @@ Module FingerTrees.
     intros A tr. induction tr; intros.
     - inversion H.
     - inversion H. subst. simpl. reflexivity.
-    - simpl. 
+    - simpl. destruct d.
+      + inversion H. subst. destruct (view_l tr), d0.
+        * {simpl. inversion H. destruct (view_l tr) eqn:Heq.
+           - rewrite (view_l_nil_empty tr) in Heq. subst.
+             inversion H. Abort.
 
-  Definition collapse_nodelist {A:Type} {F : Type -> Type} {r : reduce F} (xs : list (F A)) : list A :=
+  Definition collapse_nodelist {A:Type} {F : Type -> Type} {r : reduce F}
+             (xs : list (F A)) : list A :=
     fold_right (fun nd l => to_list nd ++ l) [] xs.
 
   Example collapse_nodelist_ex01 :
     collapse_nodelist [node2 0 1; node3 2 3 4] = [0;1;2;3;4].
   Proof. reflexivity. Qed.
 
-  Lemma to_list_deep : forall {A : Type} {F : Type -> Type} {rd : reduce digit} {rtr : reduce fingertree} 
-                         (m : fingertree (node A)) (pf sf : digit A),
-      to_list (deep pf m sf) = to_list pf ++ (collapse_nodelist (to_list m)) ++ to_list sf.
-  Proof.
-    intros A F rd rtr m pf sf. induction (deep pf m sf).
-    - simpl. unfold to_list. unfold reducer. unfold collapse_nodelist. simpl.
-    - simpl.
-    - simpl. unfold to_list. destruct pf, sf.
-      + rewrite app_assoc. unfold collapse_nodelist. simpl.
-  (* if you add an x to the left of a treduree tr and then convert it to a list, it is
+  (* if you add an x to the left of a tree tr and then convert it to a list, it is
      the same as converting tr to a list and then consing x
   *)
-  Lemma to_list_cons : forall {A : Type} (tr : fingertree A) xs x (op : A -> list A -> list A),
+  Lemma to_list_cons : forall {A : Type}  {F : Type -> Type}
+                         (tr : fingertree (F A)) xs x
+                         (op : F A -> list A -> list A),
       fingertree_reducer op (x <| tr) xs = op x (fingertree_reducer op tr xs).
   Proof.
-    intros A tr. induction tr; intros; try reflexivity.
-    destruct d; try reflexivity.
-    replace (fingertree_reducer op (deep (x <| four a a0 a1 a2) tr d0) xs)
-            with op x (op a (op a0 (op a1 (op a2 (d
+    intros A F tr.
+    induction tr; intros; try reflexivity.
+    destruct d; try reflexivity.  simpl.
     do 2 (apply f_equal).
-    rewrite IHtr.
-    - unfold fingertree_reducer. simpl. 
-      destruct d0.
-      + simpl. 
+    remember (fun (nd : node A0) (z : list A) =>
+                match nd with
+                | node2 a3 b => op a3 (op b z)
+                | node3 a3 b c => op a3 (op b (op c z))
+                end) as l.
+    remember (match d0 with 
+             | one a3 => op a3 xs
+             | two a3 b => op a3 (op b xs)
+             | three a3 b c => op a3 (op b (op c xs))
+             | four a3 b c d => op a3 (op b (op c (op d xs)))
+              end) as d0match.
+    specialize (IHtr d0match (node3 a0 a1 a2) l).
+    rewrite IHtr. rewrite Heql. reflexivity.
+  Qed.
+
 
   Theorem to_tree_to_list_id : forall {A:Type} (xs : list A),
       to_list (to_tree xs) = xs.
   Proof.
     intros. induction xs.
     - reflexivity.
-    - simpl. destruct (fold_right addl empty xs) eqn:Hdest.
-      + unfold "<|". simpl. rewrite (fold_right_empty xs Hdest). reflexivity.
-      + simpl. rewrite (fold_right_single xs a0 Hdest). reflexivity.
-      + simpl. destruct d; simpl in IHxs; rewrite Hdest in IHxs;
-                 rewrite <- IHxs; simpl; try reflexivity.
-        do 2 (apply f_equal). destruct d0.
-        *
+    - simpl. rewrite @to_list_cons with (op := cons) (F := fun x => x).
+      apply f_equal. simpl in IHxs. assumption.
+  Qed.
 
 
         
