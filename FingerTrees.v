@@ -347,7 +347,9 @@ Module FingerTrees.
   Theorem tree_append {A:Type} (tr1 : fingertree A) (tr2 : fingertree A) :
     to_list (append tr1 tr2) = to_list tr1 ++ to_list tr2.
 
-  Theorem tree_append_assoc {A:Type} ...
+  Theorem tree_append_assoc {A:Type}
+          (tr1: fingertree A) (tr2: fingertree A) : fingertree A.
+  Proof. Admitted.
 
   (* Oscar *)
   Fixpoint reverse {A: Type} (tr : fingertree A) : fingertree A.
