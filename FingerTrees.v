@@ -288,6 +288,23 @@ Module FingerTrees.
     - simpl in H. destruct d; inversion H.
   Qed.
 
+  Theorem digit_reducer_app :
+    forall {A B : Type} (xs ys : list A) d (op : B -> list A -> list A),
+      (forall a xs ys, op a (xs ++ ys) = (op a xs) ++ ys) ->
+      (digit_reducer op d (xs ++ ys) = digit_reducer op d xs ++ ys).
+  Proof.
+    intros.
+    destruct d; simpl; rewrite ?H; reflexivity.
+  Qed.
+
+  Theorem digit_reducer_op :
+    forall {A B : Type} (xs: list A) d a (op : B -> list A -> list A),
+      (digit_reducer op d (op a xs) = op a (digit_reducer op d ) ys).
+  Proof.
+    intros.
+    destruct d; simpl; rewrite ?H; reflexivity.
+  Qed.
+
   (* if you add an x to the left of a tree tr and then convert it to a list, it is
      the same as converting tr to a list and then consing x
   *)
@@ -309,10 +326,23 @@ Module FingerTrees.
     rewrite IHtr. rewrite Heql. reflexivity.
   Qed.
 
-  (* Lemma ft_reducer_app_r : forall {A : Type} {F : Type -> Type} *)
-  (*                            (tr : fingertree (F A)) xs x *)
-  (*                            (op : list A -> F A -> list A), *)
-  (*     fingertree_reducer op (tr |> x) xs = op xs  *)
+  Lemma ft_reducer_addr : forall {A : Type}  {F : Type -> Type}
+                         (tr : fingertree (F A)) xs x
+                         (op : F A -> list A -> list A),
+      fingertree_reducer op (tr |> x) xs = (fingertree_reducer op tr (op x xs)).
+  Proof.
+    intros A F tr.
+    induction tr; intros; simpl; [reflexivity | reflexivity |].
+    remember (fun (nd : node A0) (z : list A) =>
+                match nd with
+                | node2 a3 b => op a3 (op b z)
+                | node3 a3 b c => op a3 (op b (op c z))
+                end) as l.
+    destruct d0; simpl; rewrite <- Heql; try reflexivity.
+    specialize (IHtr (op a2 (op x xs)) (node3 a a0 a1) l).
+    rewrite Heql in IHtr. rewrite <- Heql in IHtr.
+    rewrite IHtr. reflexivity.
+  Qed.
 
 
   Theorem to_tree_to_list_id : forall {A:Type} (xs : list A),
@@ -358,14 +388,6 @@ Module FingerTrees.
   Notation "t1 >< t2" := (append t1 t2)
                      (at level 62, left associativity).
 
-  Theorem digit_reducer_app :
-    forall {A B : Type} (xs ys : list A) d (op : B -> list A -> list A),
-      (forall a xs ys, op a (xs ++ ys) = (op a xs) ++ ys) ->
-      (digit_reducer op d (xs ++ ys) = digit_reducer op d xs ++ ys).
-  Proof.
-    intros.
-    destruct d; simpl; rewrite ?H; reflexivity.
-  Qed.
 
   Theorem ft_reducer_app :
     forall {A : Type} {F : Type -> Type}
@@ -413,11 +435,114 @@ Module FingerTrees.
         apply (x :: init_safe A xs H).
   Qed.
 
-  Lemma init_last : forall { A : Type} (l : list A) (p: l <> []),
-      l = init_safe l p ++ [last_safe l p].
+  Lemma last_app : forall {A : Type} (xs : list A) x d,
+      (x :: xs) = removelast (x :: xs) ++ [last (x :: xs) d].
   Proof.
-    induction l; intros; simpl; [contradiction p; reflexivity |].
-     
+    induction xs; [reflexivity |].
+    intros. simpl. apply f_equal. simpl in IHxs. apply IHxs.
+  Qed.
+
+  Lemma to_list_fr_empty : forall {A : Type} (xs : list A),
+      to_list (addl' xs empty) = xs.
+  Proof.
+    induction xs.
+    - reflexivity.
+    - simpl. rewrite @ft_reducer_addl with (F := fun x => x) (op := cons).
+      simpl in IHxs. apply f_equal. apply IHxs.
+  Qed.
+
+  Lemma to_list_fr_single : forall {A : Type} a (xs : list A),
+      to_list (addl' xs (single a)) = xs ++ [a].
+  Proof.
+    induction xs.
+    - reflexivity.
+    - simpl. rewrite @ft_reducer_addl with (F := fun x => x) (op := cons).
+      simpl in IHxs. apply f_equal. apply IHxs.
+  Qed.
+
+  Lemma to_list_fr_deep : forall {A : Type} (xs : list A) pf sf m,
+      to_list (addl' xs (deep pf m sf)) = xs ++ to_list (deep pf m sf).
+  Proof.
+    induction xs.
+    - reflexivity.
+    - simpl. intros. rewrite @ft_reducer_addl with (F := fun x => x) (op := cons).
+      simpl in IHxs. apply f_equal. apply IHxs.
+  Qed.
+
+  Theorem to_list_fr : forall {A : Type} (xs : list A) (tr : fingertree A),
+      to_list (addl' xs tr) = xs ++ to_list tr.
+  Proof.
+    destruct tr.
+    - rewrite to_list_fr_empty. simpl. rewrite app_nil_r. reflexivity.
+    - rewrite to_list_fr_single. reflexivity.
+    - rewrite to_list_fr_deep. reflexivity.
+  Qed.
+
+  Theorem ft_reducer_addr' : forall { A : Type } (xs ys : list A) (tr : fingertree A),
+  fingertree_reducer cons (addr' tr xs) ys = fingertree_reducer cons tr (xs ++ ys).
+  Proof.
+    induction xs; intros; simpl in *; [reflexivity |].
+    - destruct tr; simpl in *; try (rewrite IHxs; reflexivity).
+      remember (fun (nd : node A) (z : list A) =>
+        match nd with
+        | node2 a b => a :: b :: z
+        | node3 a b c => a :: b :: c :: z
+        end) as f.
+      assert (H : forall (a1 : node A) (xs ys : list A), f a1 (xs ++ ys) = f a1 xs ++ ys);
+        [intros; rewrite Heqf; destruct a1; reflexivity |].
+      destruct d0; simpl in *; 
+        rewrite IHxs; simpl; rewrite <- Heqf;
+        rewrite last_app with (x := a0) (d0 := a0);
+        rewrite (ft_reducer_app _ _ _ _ H); simpl;
+        rewrite digit_reducer_app; try (rewrite <- app_assoc; reflexivity);
+        intros; try reflexivity.
+      + rewrite ft_reducer_addr. rewrite Heqf. rewrite <- Heqf.
+        rewrite last_app with (x := a0) (d0 := a0).
+        rewrite (ft_reducer_app _ _ _ _ H). simpl.
+        rewrite last_app with (x := a0) (d0 := a0).
+        rewrite (ft_reducer_app _ _ _ _ H). simpl.
+        rewrite 2!digit_reducer_app. rewrite <- app_assoc. reflexivity.
+        intros. reflexivity.
+        intros. reflexivity.
+  Qed.
+
+  Theorem app3_to_list : forall {A:Type} (tr1 tr2 : fingertree A) (xs : list A),
+      to_list (app3 tr1 xs tr2) = to_list tr1 ++ xs ++ to_list tr2.
+    intros A tr1.
+    remember (fun (nd : node A) (z : list A) =>
+      match nd with
+      | node2 a b => a :: b :: z
+      | node3 a b c => a :: b :: c :: z
+      end) as f.
+    assert (Hf: forall (a1 : node A) (xs ys : list A), f a1 (xs ++ ys) = f a1 xs ++ ys);
+      [intros; rewrite Heqf; destruct a1; reflexivity |].
+    Opaque addr'. induction tr1; intros; simpl.
+    - pose proof (@to_list_fr A xs tr2). simpl in H. apply H.
+    - destruct tr2.
+      + rewrite (ft_reducer_addr'). reflexivity.
+      + simpl. rewrite (ft_reducer_addl _ [] a cons).
+        apply f_equal. pose proof (@to_list_fr_single A a0 xs).
+        simpl in *. apply H. 
+      + rewrite (ft_reducer_addl _ [] a cons).
+        apply f_equal. pose proof (@to_list_fr_deep A xs d d0 tr2).
+        simpl in *. apply H. 
+    - destruct tr2; simpl in *.
+      + rewrite ft_reducer_addr'. simpl. rewrite app_nil_r.
+        destruct d0; simpl;
+          [ replace (a :: xs) with ([a] ++ xs); [|reflexivity]
+          | replace (a :: a0 :: xs) with ([a; a0] ++ xs); [|reflexivity]
+          | replace (a :: a0 :: a1 :: xs) with ([a; a0; a1] ++ xs); [|reflexivity]
+          | replace (a :: a0 :: a1 :: a2 :: xs) with ([a; a0; a1; a2] ++ xs); [|reflexivity]
+          ];
+        rewrite <- Heqf;
+        rewrite (ft_reducer_app _ _ _ _ Hf);
+        rewrite digit_reducer_app; reflexivity;
+          intros; reflexivity.
+      + 
+
+
+
+      
 
   Theorem tree_append : forall {A:Type} (tr1 : fingertree A) (tr2 : fingertree A),
     to_list (tr1 >< tr2) = to_list tr1 ++ to_list tr2.
@@ -436,36 +561,17 @@ Module FingerTrees.
         [intros; rewrite Heqf; destruct a1; reflexivity |].
       destruct tr2; simpl.
       + rewrite <- Heqf. rewrite app_nil_r. reflexivity.
-      + destruct d0.
-        * simpl. rewrite <- Heqf. rewrite app_cons.
-          rewrite <- digit_reducer_app; [| reflexivity].
-          rewrite (ft_reducer_app _ _ _ _ H). reflexivity.
-        * simpl. rewrite <- Heqf. replace ([a0;a1;a])
-          rewrite <- digit_reducer_app; [| reflexivity].
-          rewrite (ft_reducer_app _ _ _ _ H). 
-          
-    - simpl in IHtr1. unfold to_list. cbv [reducer]. cbv [fingertree_reduce].
-      
-      cbv.
-      simpl. destruct d, tr2, d0; simpl; try (rewrite app_nil_r; reflexivity).
-      + apply f_equal. replace ([a1;a0]) with ([a1] ++ [a0]).
-        * {rewrite ft_reducer_app.
-
-           - reflexivity.
-           - intros. destruct a2; reflexivity.
-          }
-        * reflexivity.
-
-
-    - simpl in *. destruct tr2.
-      + destruct d; (rewrite app_nil_r; reflexivity).
-      + destruct d.
-        * {simpl. destruct d0.
-           - simpl. apply f_equal. destruct tr1.
-             + reflexivity.
-             + simpl. destruct n; reflexivity.
-             + 
-          }
+      + destruct d0;
+          simpl; rewrite <- Heqf; try (rewrite last_app with (x := a0) (d0 := a0); 
+          rewrite <- digit_reducer_app; [| reflexivity];
+          rewrite (ft_reducer_app _ _ _ _ H); reflexivity).
+        rewrite <- digit_reducer_app; [| reflexivity].
+        rewrite ft_reducer_addr. rewrite Heqf. rewrite <- Heqf. 
+        rewrite <- ft_reducer_app; [reflexivity |].
+        intros. rewrite Heqf. destruct a4; reflexivity.
+      + rewrite <- Heqf.
+        specialize (IHtr1 
+        
          
 
   Theorem tree_append_assoc {A:Type}
