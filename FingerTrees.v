@@ -398,11 +398,16 @@ Module FingerTrees.
   Proof. unfold reverse. unfold reverse_tree. unfold reverse_digit.
   simpl. reflexivity. Qed.
 
-  
-    
+ 
   Theorem tree_reverse {A : Type} (tr : fingertree A) :
     to_list (reverse tr) = rev (to_list tr).
-
+  Proof.
+    intros. induction tr; intros; try reflexivity.
+    simpl. destruct (reverse_digit (fun x : A => x) d0).
+    - destruct d, d0.
+      + simpl.  (* apply ft_reducer_app *)
+  
+    
   Theorem tree_reverse_idem {A : Type} ...
 
    
