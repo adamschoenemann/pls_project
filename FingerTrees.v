@@ -384,9 +384,22 @@ Module FingerTrees.
   Definition reverse {A: Type} : fingertree A -> fingertree A :=
     reverse_tree (fun (x: A) => x).
 
-  
-  Proof. Admitted.
+   Example reverse_ex01 :
+     reverse (single 1)  = single 1.
+   
+   Proof. reflexivity. Qed.
+   
+   Example reverse_ex02:forall (A : Type),
+     reverse (@empty A)  = (@empty A).
+   
+  Example reverse_ex03 :
+    reverse (deep (two 0 1) (single (node2 2 3)) (three 4 5 6)) =
+            deep (three 6 5 4) (single (node2 3 2)) (two 1 0).
+  Proof. unfold reverse. unfold reverse_tree. unfold reverse_digit.
+  simpl. reflexivity. Qed.
 
+  
+    
   Theorem tree_reverse {A : Type} (tr : fingertree A) :
     to_list (reverse tr) = rev (to_list tr).
 
