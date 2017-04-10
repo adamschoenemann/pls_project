@@ -230,7 +230,7 @@ Module FingerTrees.
     | cons_l _ _ => False
     end.
 
-  Lemma view_l_nil_empty : forall {A : Type} tr, @view_l A tr = nil_l <-> tr = empty.
+  Lemma view_l_nil_empty : forall {A : Type} (tr : fingertree A), view_l tr = nil_l <-> tr = empty.
   Proof.
     intros. split.
     - intros. destruct tr; [reflexivity | inversion H |]. simpl in H.
@@ -239,33 +239,30 @@ Module FingerTrees.
       destruct d, (view_l tr), d0; inversion H.
   Qed.
 
-  Lemma to_tree_empty : forall (A : Type), @is_empty A (to_tree []).
+  Lemma to_tree_empty : forall {A : Type}, @is_empty A (to_tree []).
   Proof.
     intros. simpl. unfold is_empty. destruct (view_l empty) eqn:Heq.
     - apply I.
     - inversion Heq.
   Qed.
 
-  Lemma addl_not_empty : forall (A : Type) (tr : fingertree A) x, ~(addl x tr = empty).
+  Lemma addl_not_empty : forall {A : Type} (tr : fingertree A) x, ~(addl x tr = empty).
   Proof.
     intros A tr x H. induction tr; inversion H.
     destruct d; inversion H1.
   Qed.
 
-  Lemma addl_not_2single : forall (A : Type) (x y z : A), ~(addl x (single y) = single z).
+  Lemma addl_not_2single : forall {A : Type} (x y z : A), ~(addl x (single y) = single z).
   Proof.
     intros A x y z H. simpl in H. inversion H.
   Qed.
 
-  Lemma addr_not_empty : forall (A : Type) (tr : fingertree A) x, ~(addr tr x = empty).
+  Lemma addr_not_empty : forall {A : Type} (tr : fingertree A) x, ~(addr tr x = empty).
     intros A tr x H. induction tr; inversion H.
     destruct d0; inversion H1.
   Qed.
 
-  (* should reuse lemmas from above, but cant figure out how right now
-     (in my defense, I am a bit drunk)
-  *)
-  Lemma addl_not_nil : forall (A : Type) (tr : fingertree A) x,
+  Lemma addl_not_nil : forall {A : Type} (tr : fingertree A) x,
       ~(view_l (addl x tr) = nil_l).
   Proof.
     intros A tr x H. induction tr; inversion H.
@@ -284,24 +281,6 @@ Module FingerTrees.
     | cons_l _ tl => tl
     end.
 
-  Lemma fold_right_empty : forall {A : Type} (xs : list A),
-      fold_right addl empty xs = empty -> xs = [].
-  Proof.
-    induction xs.
-    - intros. reflexivity.
-    - intros. simpl in H. exfalso. eapply addl_not_empty. apply H.
-  Qed.
-
-  Lemma fold_right_single : forall {A : Type} (xs : list A) x,
-      fold_right addl empty xs = single x -> xs = [x].
-  Proof.
-    induction xs; [intros; inversion H|].
-    intros. simpl in H. destruct (fold_right addl empty xs) eqn:Heq.
-    - simpl in *. inversion H. rewrite (fold_right_empty _ Heq). reflexivity.
-    - exfalso. apply (addl_not_2single _ a a0 x H).
-    - simpl in H. destruct d; inversion H.
-  Qed.
-
   Theorem digit_reducer_app :
     forall {A B : Type} (xs ys : list B) d (op : A -> list B -> list B),
       (forall a xs ys, op a (xs ++ ys) = (op a xs) ++ ys) ->
@@ -313,7 +292,8 @@ Module FingerTrees.
 
 
   (* if you add an x to the left of a tree tr and then convert it to a list, it is
-     the same as converting tr to a list and then consing x
+     the same as converting tr to a list and then consing x.
+     This is the general version of the above.
   *)
   Lemma ft_reducer_addl : forall {A B : Type}  {F : Type -> Type}
                          (tr : fingertree (F A)) xs x
@@ -324,8 +304,7 @@ Module FingerTrees.
     induction tr; intros; try reflexivity.
     destruct d; try reflexivity.  simpl.
     do 2 (apply f_equal). 
-    specialize (IHtr (digit_reducer op d0 xs) (node3 a0 a1 a2) (nd_reducer op)).
-    rewrite IHtr. reflexivity.
+    apply (IHtr (digit_reducer op d0 xs) (node3 a0 a1 a2) (nd_reducer op)).
   Qed.
 
   Lemma ft_reducer_addr : forall {A B : Type}  {F : Type -> Type}
@@ -336,27 +315,28 @@ Module FingerTrees.
     intros A B F tr.
     induction tr; intros; simpl; [reflexivity | reflexivity |].
     destruct d0; simpl; try reflexivity.
-    specialize (IHtr (op a2 (op x xs)) (node3 a a0 a1) (nd_reducer op)).
-    rewrite IHtr. reflexivity.
+    rewrite (IHtr (op a2 (op x xs)) (node3 a a0 a1) (nd_reducer op)).
+    reflexivity.
   Qed.
 
 
   Theorem to_tree_to_list_id : forall {A:Type} (xs : list A),
       to_list (to_tree xs) = xs.
   Proof.
-    intros. induction xs.
-    - reflexivity.
-    - simpl. rewrite (@ft_reducer_addl A (list A) (fun x => x) _ [] a _).
-      apply f_equal. simpl in IHxs. assumption.
+    intros. induction xs; [reflexivity |].
+    simpl. rewrite (@ft_reducer_addl A (list A) (fun x => x) _ [] a _).
+    apply f_equal. simpl in IHxs. assumption.
   Qed.
 
-  (* Adam *)
-
+  (**
+     We need this data structure to represent lists that can be converted into
+     lists of nodes in a total way
+  **)
   Inductive app3_list (A : Type) : Type :=
-  | app3_two  : A -> A -> app3_list A
+  | app3_two   : A -> A -> app3_list A
   | app3_three : A -> A -> A -> app3_list A
   | app3_four  : A -> A -> A -> A -> app3_list A
-  | app3_more : A -> A -> A -> app3_list A -> app3_list A.
+  | app3_more  : A -> A -> A -> app3_list A -> app3_list A.
 
   Arguments app3_two {A} _ _.
   Arguments app3_three {A} _ _ _.
@@ -385,81 +365,59 @@ Module FingerTrees.
       reducel := @a3_reducel;
     |}.
 
-  (* Inductive dig_app3_lst (A : Type) : digit A -> list A -> digit A -> list A -> Type := *)
-  (* | mk_da3l : forall d1 xs d2, dig_app3_lst A d1 xs d2 (to_list d1 ++ xs ++ to_list d2). *)
-
-  (* Arguments  mk_da3l {A} _ _ _. *)
-
+  (**
+     Yeah, this is a doosie, but I don't know how to define it in more succint terms
+     while still retaining its total properties.
+     In the original paper, this is much simpler since we do not have to use an
+     app3_list and can write partial functions, but we cannot do proper proofs
+     if we do this (believe me, I've wasted many hours on trying).
+   **)
   Fixpoint dig_app3 {A:Type} (d1 : digit A) (xs : list A) (d2 : digit A): app3_list A :=
     match d1, xs, d2 with
-    | one a, [], one b => app3_two a b
-    | one a, [], two b c => app3_three a b c
-    | one a, [], three b c d => app3_four a b c d
-    | one a, [], four b c d e => app3_more a b c (app3_two d e)
+    | one a,        [], one b        => app3_two a b
+    | one a,        [], two b c      => app3_three a b c
+    | one a,        [], three b c d  => app3_four a b c d
+    | one a,        [], four b c d e => app3_more a b c (app3_two d e)
 
-    | two a b, [], one c => app3_three a b c
-    | two a b, [], two c d => app3_four a b c d
-    | two a b, [], three c d e => app3_more a b c (app3_two d e)
-    | two a b, [], four c d e f => app3_more a b c (app3_three d e f)
+    | two a b,      [], one c        => app3_three a b c
+    | two a b,      [], two c d      => app3_four a b c d
+    | two a b,      [], three c d e  => app3_more a b c (app3_two d e)
+    | two a b,      [], four c d e f => app3_more a b c (app3_three d e f)
 
-    | three a b c, [], one d => app3_four a b c d
-    | three a b c, [], two d e => app3_more a b c (app3_two d e)
-    | three a b c, [], three d e f => app3_more a b c (app3_three d e f)
-    | three a b c, [], four d e f g => app3_more a b c (app3_four d e f g)
+    | three a b c,  [], one d        => app3_four a b c d
+    | three a b c,  [], two d e      => app3_more a b c (app3_two d e)
+    | three a b c,  [], three d e f  => app3_more a b c (app3_three d e f)
+    | three a b c,  [], four d e f g => app3_more a b c (app3_four d e f g)
 
-    | four a b c d, [], one e => app3_more a b c (app3_two d e)
-    | four a b c d, [], two e f => app3_more a b c (app3_three d e f)
-    | four a b c d, [], three e f g => app3_more a b c (app3_four d e f g)
+    | four a b c d, [], one e        => app3_more a b c (app3_two d e)
+    | four a b c d, [], two e f      => app3_more a b c (app3_three d e f)
+    | four a b c d, [], three e f g  => app3_more a b c (app3_four d e f g)
     | four a b c d, [], four e f g h => app3_more a b c (app3_more d e f (app3_two g h))
 
-    | one a, (x :: xs), _        => dig_app3 (two a x) xs d2
-    | two a b, (x :: xs), _      => dig_app3 (three a b x) xs d2
-    | three a b c, (x :: xs), _  => dig_app3 (four a b c x) xs d2
-    | four a b c d, (x :: xs), _ => app3_more a b c (dig_app3 (two d x) xs d2)
+    | one a,        (x :: xs), _     => dig_app3 (two a x) xs d2
+    | two a b,      (x :: xs), _     => dig_app3 (three a b x) xs d2
+    | three a b c,  (x :: xs), _     => dig_app3 (four a b c x) xs d2
+    | four a b c d, (x :: xs), _     => app3_more a b c (dig_app3 (two d x) xs d2)
     end.
 
-
-  (* Fixpoint dig_app3 {A:Type} (ds1 : digit A) (ds2 : list A) (ds3 : digit A): list A := *)
-  (*   to_list ds1 ++ ds2 ++ to_list ds3. *)
-
+  (**
+     group a list of A's into a list of nodes of A'
+     uses the app3_list data type to ensure totality and make proofs
+     about nodes possible
+   **)
   Fixpoint nodes {A : Type} (xs : app3_list A) : list (node A) :=
     match xs with
-    | app3_two a b =>  [node2 a b]
-    | app3_three a b c  => [node3 a b c]
-    | app3_four a b c d =>  [node2 a b; node2 c d]
-    | app3_more a b c xs' =>  node3 a b c :: nodes xs'
+    | app3_two a b        => [node2 a b]
+    | app3_three a b c    => [node3 a b c]
+    | app3_four a b c d   => [node2 a b; node2 c d]
+    | app3_more a b c xs' => node3 a b c :: nodes xs'
     end.
 
-  Program Fixpoint nodes' {A : Type} (xs : list A) (pf : length xs >= 2) : list (node A) :=
-    match xs with
-    | [] =>  False_rect (list (node A)) _
-    | a :: xs0 =>
-      match xs0 with
-      | [] =>  False_rect (list (node A)) _ 
-      | b :: xs1 =>
-        match xs1 with
-        | [] => [node2 a b]
-        | c :: xs2 =>
-          match xs2 with
-          | [] => [node3 a b c]
-          | d :: xs3 =>
-            match xs3 with
-            | [] => [node2 a b; node2 c d]
-            | _ as xs5 => node3 a b c :: nodes' xs2 _
-            end
-          end
-        end
-      end
-    end.
-  Next Obligation.
-    inversion pf.
-  Defined.
-  Next Obligation. inversion pf. omega. Defined.
-  Next Obligation.
-    unfold not in *. destruct xs3; [contradiction (H eq_refl)|].
-    destruct xs3; simpl; omega.
-  Defined.
 
+  (**
+     append two fingertrees with a list of "remainder-values".
+     This does all the hard work of append. Should be amortized logarithmic time
+   **)
   Fixpoint app3 {A:Type} (tr1:fingertree A) (ds : list A) (tr2:fingertree A)
     : fingertree A :=
     match tr1, tr2 with
@@ -471,14 +429,6 @@ Module FingerTrees.
         let ds' := dig_app3 sf1 ds pr2 in
         deep pr1 (app3 m1 (nodes ds') m2) sf2
     end.
-  (* Next Obligation. *)
-  (*   destruct sf1, pr2, ds; simpl; omega. *)
-  (* Defined. *)
-  (* Next Obligation. *)
-  (*   split. *)
-  (*   - intros. unfold not. intros. destruct H2. inversion H2. *)
-  (*   - intros. unfold not. intros. destruct H2. inversion H2. *)
-  (* Defined. *)
 
   Definition append {A:Type}
            (tr1 : fingertree A) (tr2 : fingertree A) : fingertree A :=
@@ -488,7 +438,12 @@ Module FingerTrees.
   Notation "t1 >< t2" := (append t1 t2)
                      (at level 62, left associativity).
 
-
+  
+  (**
+     reducing a ft with an accumulator that is the concatenation of two
+     lists xs and ys, is the same as just reducing with xs and then appending ys
+     given that the operation we use for reduction has the same property
+   **)
   Theorem ft_reducer_app :
     forall {A : Type} {F : Type -> Type}
       (tr : fingertree (F A)) (xs ys : list A)
@@ -504,36 +459,6 @@ Module FingerTrees.
       + intros. apply nd_reducer_app. assumption.
   Qed.
 
-  Lemma app_cons : forall {A : Type} (x : A) xs, x :: xs = [x] ++ xs.
-  Proof.
-    intros. reflexivity.
-  Qed.
-
-  Fixpoint last_safe {A : Type} (l : list A) (p:l <> []) {struct l} : A.
-  Proof.
-    destruct l as [| x l'].
-    - contradiction p. reflexivity.
-    - destruct l' as [| y l''] eqn:Hl'.
-      + apply x.
-      + apply (last_safe A (l')). intros H. subst. inversion H.
-  Qed.
-
-  Fixpoint init_safe {A : Type} (l : list A) (p:l <> []) {struct l} : list A.
-  Proof.
-    destruct l as [| x xs].
-    - contradiction p. reflexivity.
-    - destruct xs as [| x' xs'] eqn:Hxs.
-      + apply [].
-      + assert (xs <> []). intros H. subst. inversion H.
-        apply (x :: init_safe A xs H).
-  Qed.
-
-  Lemma last_app : forall {A : Type} (xs : list A) x d,
-      (x :: xs) = removelast (x :: xs) ++ [last (x :: xs) d].
-  Proof.
-    induction xs; [reflexivity |].
-    intros. simpl. apply f_equal. simpl in IHxs. apply IHxs.
-  Qed.
 
   Lemma to_list_fr_empty : forall {A B : Type} op (xs : list A) (ys : B),
       ft_reducer op (addl' xs empty) ys = ft_reducer op (to_tree xs) ys.
@@ -592,20 +517,11 @@ Module FingerTrees.
   Qed.
 
   Lemma ft_reducer_deep : forall {A B : Type} op (m : fingertree (node A)) pf sf (ys : B),
-      ft_reducer op (deep pf m sf) ys = digit_reducer op pf (ft_reducer (nd_reducer op) m (digit_reducer op sf ys)).
+      ft_reducer op (deep pf m sf) ys =
+      digit_reducer op pf (ft_reducer (nd_reducer op) m (digit_reducer op sf ys)).
   Proof.
     intros. reflexivity.
   Qed.
-
-  Lemma app_sing : forall {A} (x y : A) xs, [x] = xs ++ [y] -> x = y /\ xs = [].
-  Proof.
-    intros. destruct xs; split.
-    - inversion H. reflexivity.
-    - reflexivity.
-    - inversion H. contradiction (app_cons_not_nil xs [] y H2).
-    - inversion H. contradiction (app_cons_not_nil xs [] y H2).
-  Qed.
-
 
   Lemma nodes_reducer : forall {A B : Type} xs (op : A -> B -> B) ys,
       reducer (nd_reducer op) (nodes xs) ys =
@@ -637,9 +553,11 @@ Module FingerTrees.
       simpl in *.  rewrite IHm. reflexivity.
   Qed.
 
+  (**
+     reducing over app3 tr1 xs tr2 "distributes"
+  **)
   Theorem app3_to_list :
-    forall {A B:Type} (op : A -> B -> B)
-      (tr1 tr2 : fingertree A) xs (ys : B),
+    forall {A B:Type} (op : A -> B -> B) (tr1 tr2 : fingertree A) xs (ys : B),
     ft_reducer op (app3 tr1 xs tr2) ys =
     ft_reducer op tr1 (ft_reducer op (to_tree xs) (ft_reducer op tr2 ys)).
   Proof.
@@ -665,7 +583,10 @@ Module FingerTrees.
         Transparent addr' addl'.
   Qed.
 
-
+  (**
+     appending to trees and converting the to lists is the same as converting
+     them to lists separately and appending the lists together
+   **)
   Theorem tree_append : forall {A:Type} (tr1 : fingertree A) (tr2 : fingertree A),
     to_list (tr1 >< tr2) = to_list tr1 ++ to_list tr2.
   Proof.
@@ -674,6 +595,9 @@ Module FingerTrees.
     intros. reflexivity.
   Qed.
 
+  (**
+     appending two trees is associative with respect to to_list
+  **)
   Theorem tree_append_assoc : forall {A B : Type} (tr1 tr2 tr3 : fingertree A)
                                 (op : A -> B -> B) ys,
   reducer op (tr1 >< (tr2 >< tr3)) ys = reducer op ((tr1 >< tr2) >< tr3) ys.
