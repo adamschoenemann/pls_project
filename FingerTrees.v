@@ -385,28 +385,80 @@ Module FingerTrees.
       reducel := @a3_reducel;
     |}.
 
-  Fixpoint dig_app3 {A:Type} (ds1 : digit A) (ds2 : app3_list A) (ds3 : digit A): app3_list A :=
-    match ds1, ds2, ds3 with
-    | one a, app3_two b c, one d => app3_four a b c d
-    | two a b, app3_two c d, one e => app3_more a b c (app3_two d e)
-    | three a b c, app3_two d e, one f => app3_more a b c (app3_three d e f)
-    | four a b c d, app3_two e f, one g => app3_more a b c (app3_four d e f g)
-    | one a, app3_three b c, one d => app3_four a b c d
-    | two a b, app3_three c d, one e => app3_more a b c (app3_two d e)
-    | three a b c, app3_three d e, one f => app3_more a b c (app3_three d e f)
-    | four a b c d, app3_three e f, one g => app3_more a b c (app3_four d e f g)
+  (* Inductive dig_app3_lst (A : Type) : digit A -> list A -> digit A -> list A -> Type := *)
+  (* | mk_da3l : forall d1 xs d2, dig_app3_lst A d1 xs d2 (to_list d1 ++ xs ++ to_list d2). *)
+
+  (* Arguments  mk_da3l {A} _ _ _. *)
+
+  Fixpoint dig_app3 {A:Type} (d1 : digit A) (xs : list A) (d2 : digit A): app3_list A :=
+    match d1, xs, d2 with
+    | one a, [], one b => app3_two a b
+    | one a, [], two b c => app3_three a b c
+    | one a, [], three b c d => app3_four a b c d
+    | one a, [], four b c d e => app3_more a b c (app3_two d e)
+
+    | two a b, [], one c => app3_three a b c
+    | two a b, [], two c d => app3_four a b c d
+    | two a b, [], three c d e => app3_more a b c (app3_two d e)
+    | two a b, [], four c d e f => app3_more a b c (app3_three d e f)
+
+    | three a b c, [], one d => app3_four a b c d
+    | three a b c, [], two d e => app3_more a b c (app3_two d e)
+    | three a b c, [], three d e f => app3_more a b c (app3_three d e f)
+    | three a b c, [], four d e f g => app3_more a b c (app3_four d e f g)
+
+    | four a b c d, [], one e => app3_more a b c (app3_two d e)
+    | four a b c d, [], two e f => app3_more a b c (app3_three d e f)
+    | four a b c d, [], three e f g => app3_more a b c (app3_four d e f g)
+    | four a b c d, [], four e f g h => app3_more a b c (app3_more d e f (app3_two g h))
+
+    | one a, (x :: xs), _        => dig_app3 (two a x) xs d2
+    | two a b, (x :: xs), _      => dig_app3 (three a b x) xs d2
+    | three a b c, (x :: xs), _  => dig_app3 (four a b c x) xs d2
+    | four a b c d, (x :: xs), _ => app3_more a b c (dig_app3 (two d x) xs d2)
+    end.
 
 
-    to_list ds1 ++ ds2 ++ to_list ds3.
+  (* Fixpoint dig_app3 {A:Type} (ds1 : digit A) (ds2 : list A) (ds3 : digit A): list A := *)
+  (*   to_list ds1 ++ ds2 ++ to_list ds3. *)
 
   Fixpoint nodes {A : Type} (xs : app3_list A) : list (node A) :=
     match xs with
-    | app3_none => [] (* should never happen *)
-    | app3_two a b => [node2 a b]
-    | app3_three a b c => [node3 a b c]
-    | app3_four a b c d => [node2 a b; node2 c d]
-    | app3_more a b c xs' => node3 a b c :: nodes xs'
+    | app3_two a b =>  [node2 a b]
+    | app3_three a b c  => [node3 a b c]
+    | app3_four a b c d =>  [node2 a b; node2 c d]
+    | app3_more a b c xs' =>  node3 a b c :: nodes xs'
     end.
+
+  Program Fixpoint nodes' {A : Type} (xs : list A) (pf : length xs >= 2) : list (node A) :=
+    match xs with
+    | [] =>  False_rect (list (node A)) _
+    | a :: xs0 =>
+      match xs0 with
+      | [] =>  False_rect (list (node A)) _ 
+      | b :: xs1 =>
+        match xs1 with
+        | [] => [node2 a b]
+        | c :: xs2 =>
+          match xs2 with
+          | [] => [node3 a b c]
+          | d :: xs3 =>
+            match xs3 with
+            | [] => [node2 a b; node2 c d]
+            | _ as xs5 => node3 a b c :: nodes' xs2 _
+            end
+          end
+        end
+      end
+    end.
+  Next Obligation.
+    inversion pf.
+  Defined.
+  Next Obligation. inversion pf. omega. Defined.
+  Next Obligation.
+    unfold not in *. destruct xs3; [contradiction (H eq_refl)|].
+    destruct xs3; simpl; omega.
+  Defined.
 
   Fixpoint app3 {A:Type} (tr1:fingertree A) (ds : list A) (tr2:fingertree A)
     : fingertree A :=
@@ -416,11 +468,19 @@ Module FingerTrees.
     | single x, _ => x <| addl' ds tr2
     | _, single x => addr' tr1 ds |> x
     | deep pr1 m1 sf1, deep pr2 m2 sf2 =>
-        deep pr1 (app3 m1 (nodes (dig_app3 sf1 ds pr2)) m2) sf2
+        let ds' := dig_app3 sf1 ds pr2 in
+        deep pr1 (app3 m1 (nodes ds') m2) sf2
     end.
+  (* Next Obligation. *)
+  (*   destruct sf1, pr2, ds; simpl; omega. *)
+  (* Defined. *)
+  (* Next Obligation. *)
+  (*   split. *)
+  (*   - intros. unfold not. intros. destruct H2. inversion H2. *)
+  (*   - intros. unfold not. intros. destruct H2. inversion H2. *)
+  (* Defined. *)
 
-
-  Fixpoint append {A:Type}
+  Definition append {A:Type}
            (tr1 : fingertree A) (tr2 : fingertree A) : fingertree A :=
     app3 tr1 [] tr2.
 
@@ -546,30 +606,23 @@ Module FingerTrees.
     - inversion H. contradiction (app_cons_not_nil xs [] y H2).
   Qed.
 
-  Lemma nodes_to_list : forall {A B : Type} xs x1 x2 x3 x4 (op : A -> B -> B) ys,
-      reducer (nd_reducer op) (nodes (x1 :: x2 :: x3 :: x4 :: xs)) ys =
-      reducer op (x1 :: x2 :: x3 :: x4 :: xs) ys.
-  Proof.
-    intros A B xs. induction xs; intros; [reflexivity|].
-    
-    simpl. destruct xs; [reflexivity|].
-    destruct xs; [reflexivity |].
-    simpl in *. do 3 (apply f_equal).
-    intros A B xs x1 x2. remember (x1 :: x2 :: xs). induction l; intros.
-    - inversion Heql.
-    - simpl in *. inversion Heql. destruct xs eqn:Hxs.
-      + reflexivity.
-      + inversion Heql. subst. simpl in *.
-    - inversion Heql. destruct l.
-      + inversion H1.
-      + inversion H1. subst. simpl in *.
-    [reflexivity|].
-    - simpl in *. inversion Heql. subst.
-      simpl in IHl.
-    - simpl in *. destruct l.
-      + simpl.
-      + 
 
+  Lemma nodes_reducer : forall {A B : Type} xs (op : A -> B -> B) ys,
+      reducer (nd_reducer op) (nodes xs) ys =
+      reducer op xs ys.
+  Proof.
+    intros A B xs. induction xs; intros; simpl in *; try reflexivity.
+    rewrite IHxs. reflexivity.
+  Qed.
+
+  Lemma nodes_to_list : forall {A B : Type} xs (op : A -> B -> B) ys,
+      reducer (nd_reducer op) (to_tree (nodes xs)) ys =
+      reducer op (to_tree xs) ys.
+  Proof.
+    intros A B xs. induction xs; intros; simpl in *; try reflexivity.
+    rewrite (ft_reducer_addl _ _ (node3 a a0 a1) _). simpl.
+    rewrite 3!(ft_reducer_addl _ _ _ op). rewrite IHxs. reflexivity.
+  Qed.
 
   Lemma dig_app3_to_list : forall {A B : Type} (m : list A) (op : A -> B -> B) (pf sf : digit A) (ys : B),
       ft_reducer (nd_reducer op) (to_tree (nodes (dig_app3 pf m sf))) ys =
@@ -577,29 +630,13 @@ Module FingerTrees.
   Proof.
     intros A B. induction m; intros.
     - destruct pf, sf; try reflexivity.
-    - unfold to_tree. destruct pf, sf; simpl.
-      + destruct (m ++ [a1]) eqn:Heq; symmetry in Heq; [contradiction (app_cons_not_nil m [] a1 Heq)|].
-        induction l. 
-        * simpl. rewrite (ft_reducer_addl _ _ a). 
-          destruct (app_sing a2 a1 m Heq). subst. reflexivity.
-        * 
+    - simpl. destruct pf; simpl in *;
+               try (rewrite IHm; simpl; rewrite (ft_reducer_addl _ _ a _); reflexivity).
+      rewrite (ft_reducer_addl _ _ (node3 a0 a1 a2) _). simpl.
+      rewrite (ft_reducer_addl _ _ a _ ). do 3 (apply f_equal).
+      simpl in *.  rewrite IHm. reflexivity.
+  Qed.
 
-        destruct l; do 20 (try (destruct l)); simpl.
-
-        *  destruct (app_sing a2 a1 m Heq). subst.
-          reflexivity.
-        * rewrite (ft_reducer_addl _ _ a). . subst.
-          reflexivity.
-          
-         
-        * simpl. rewrite (ft_reducer_addl _ _ a). 
-
-  (* problem is that the induction hyp wants op to be lifted
-      into node, but it is not since digit_reducer.
-     Maybe the problem is that A is mentioned in the fingertree,
-   so the the inductive case puts an extra node that is not actually
-   necessary. Just change to B as I have done below, but now we need
-   to change all the auxiliary lemmas to be also be more general*)
   Theorem app3_to_list :
     forall {A B:Type} (op : A -> B -> B)
       (tr1 tr2 : fingertree A) xs (ys : B),
@@ -623,100 +660,28 @@ Module FingerTrees.
       + simpl in *.
         rewrite IHtr1.
         apply f_equal. rewrite <- ?ft_reducer_deep.
-                           
-        apply f_equal. destruct d0, d1; simpl.
-        * {destruct (xs ++ [a0]) eqn:Hxs.
-           - symmetry in Hxs. contradiction (app_cons_not_nil xs [] a0).
-           - destruct l.
-             + destruct xs; [simpl; inversion Hxs; reflexivity|].
-               inversion Hxs. symmetry in H1. contradiction (app_cons_not_nil xs [] a0).
-             + destruct l.
-               * {simpl. destruct xs; [inversion Hxs|].
-                  simpl. rewrite (ft_reducer_addl (fold_right addl empty xs)).
-                  inversion Hxs. destruct xs.
-                  - inversion H1. reflexivity.
-                  - inversion H1. symmetry in H3. contradiction (app_cons_not_nil xs [] a0).
-                  }
-               * {simpl. destruct l.
-                  - simpl. destruct xs; [inversion Hxs|].
-                    destruct xs; [inversion Hxs|].
-                    inversion Hxs. simpl. rewrite (ft_reducer_addl _ _ a1).
-                    rewrite (ft_reducer_addl _ _ a2).
-                    do 3 (apply f_equal).
-                    rewrite ft_reducer_addl'. simpl.
-
-                     inversion Hxs. simpl.
-                  }
-
-          }
-       * 
-        specialize (IHtr1 op tr2' (nodes (dig_app3 d0' xs d1'))).
-      + rewrite IHtr1.
-        apply f_equal.
-        remember (ft_reducer (nd_reducer op) tr2 (digit_reducer op d2 ys)) as ys'.
-        
-
-        
-        destruct (nodes (dig_app3 d0 xs d1)) eqn:Heq. 
-
-        pose proof (ft_reducer_addl' op).
-        rewrite (H xs _ empty).
-        rewrite (H (nodes (dig_app3 d0 xs d1)) _ empty).
-        
-        simpl in H.
-        
-      + rewrite @ft_reducer_addr with (F:= fun x => x)(op := cons).
-        rewrite ft_reducer_addr'. simpl.
-        rewrite <- digit_reducer_app; [| intros; reflexivity].
-        rewrite <- ft_reducer_app; [| destruct a0; reflexivity].
-        rewrite <- digit_reducer_app; [| intros; reflexivity].
+        pose proof (@dig_app3_to_list A B). simpl in *. rewrite H.
         reflexivity.
-      + rewrite <- digit_reducer_app; [| intros; reflexivity].
-        rewrite <- ft_reducer_app; [| destruct a; reflexivity].
-        do 2 (rewrite <- digit_reducer_app; [| intros; reflexivity]).
-        rewrite <- ft_reducer_app; [| destruct a; reflexivity].
-        simpl in *. 
-        reflexivity.
+        Transparent addr' addl'.
+  Qed.
 
-
-
-
-
-      
 
   Theorem tree_append : forall {A:Type} (tr1 : fingertree A) (tr2 : fingertree A),
     to_list (tr1 >< tr2) = to_list tr1 ++ to_list tr2.
   Proof.
-    intros A tr1. induction tr1; intros; [reflexivity | |].
-    - destruct tr2; [reflexivity | reflexivity |].
-      simpl. destruct d; try reflexivity.
-      simpl. do 2 (apply f_equal). apply @ft_reducer_addl with (F := node).
-    - simpl in *. 
-      remember (fun (nd : node A) (z : list A) =>
-        match nd with
-        | node2 a b => a :: b :: z
-        | node3 a b c => a :: b :: c :: z
-        end) as f.
-      assert (forall (a1 : node A) (xs ys : list A), f a1 (xs ++ ys) = f a1 xs ++ ys);
-        [intros; rewrite Heqf; destruct a1; reflexivity |].
-      destruct tr2; simpl.
-      + rewrite <- Heqf. rewrite app_nil_r. reflexivity.
-      + destruct d0;
-          simpl; rewrite <- Heqf; try (rewrite last_app with (x := a0) (d0 := a0); 
-          rewrite <- digit_reducer_app; [| reflexivity];
-          rewrite (ft_reducer_app _ _ _ _ H); reflexivity).
-        rewrite <- digit_reducer_app; [| reflexivity].
-        rewrite ft_reducer_addr. rewrite Heqf. rewrite <- Heqf. 
-        rewrite <- ft_reducer_app; [reflexivity |].
-        intros. rewrite Heqf. destruct a4; reflexivity.
-      + rewrite <- Heqf.
-        specialize (IHtr1 
-        
-         
+    intros A tr1 tr2. simpl. unfold "><". rewrite app3_to_list. simpl.
+    rewrite <- (ft_reducer_app tr1 ); [reflexivity |].
+    intros. reflexivity.
+  Qed.
 
-  Theorem tree_append_assoc {A:Type}
-          (tr1: fingertree A) (tr2: fingertree A) : fingertree A.
-  Proof. Admitted.
+  Theorem tree_append_assoc : forall {A B : Type} (tr1 tr2 tr3 : fingertree A)
+                                (op : A -> B -> B) ys,
+  reducer op (tr1 >< (tr2 >< tr3)) ys = reducer op ((tr1 >< tr2) >< tr3) ys.
+  Proof.
+    intros A B tr1. unfold "><". induction tr1; intros; rewrite ?app3_to_list; reflexivity.
+  Qed.
+
+      
 
   (* Oscar *)
     Fixpoint reverse_node {A: Type}{B: Type}
