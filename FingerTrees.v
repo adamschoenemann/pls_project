@@ -303,7 +303,7 @@ Module FingerTrees.
   Qed.
 
   Theorem digit_reducer_app :
-    forall {A B : Type} (xs ys : list A) d (op : B -> list A -> list A),
+    forall {A B : Type} (xs ys : list B) d (op : A -> list B -> list B),
       (forall a xs ys, op a (xs ++ ys) = (op a xs) ++ ys) ->
       (digit_reducer op d (xs ++ ys) = digit_reducer op d xs ++ ys).
   Proof.
@@ -311,15 +311,16 @@ Module FingerTrees.
     destruct d; simpl; rewrite ?H; reflexivity.
   Qed.
 
+
   (* if you add an x to the left of a tree tr and then convert it to a list, it is
      the same as converting tr to a list and then consing x
   *)
-  Lemma ft_reducer_addl : forall {A : Type}  {F : Type -> Type}
+  Lemma ft_reducer_addl : forall {A B : Type}  {F : Type -> Type}
                          (tr : fingertree (F A)) xs x
-                         (op : F A -> list A -> list A),
+                         (op : F A -> B -> B),
       ft_reducer op (x <| tr) xs = op x (ft_reducer op tr xs).
   Proof.
-    intros A F tr.
+    intros A B F tr.
     induction tr; intros; try reflexivity.
     destruct d; try reflexivity.  simpl.
     do 2 (apply f_equal). 
@@ -327,12 +328,12 @@ Module FingerTrees.
     rewrite IHtr. reflexivity.
   Qed.
 
-  Lemma ft_reducer_addr : forall {A : Type}  {F : Type -> Type}
+  Lemma ft_reducer_addr : forall {A B : Type}  {F : Type -> Type}
                          (tr : fingertree (F A)) xs x
-                         (op : F A -> list A -> list A),
+                         (op : F A -> B -> B),
       ft_reducer op (tr |> x) xs = (ft_reducer op tr (op x xs)).
   Proof.
-    intros A F tr.
+    intros A B F tr.
     induction tr; intros; simpl; [reflexivity | reflexivity |].
     destruct d0; simpl; try reflexivity.
     specialize (IHtr (op a2 (op x xs)) (node3 a a0 a1) (nd_reducer op)).
@@ -345,25 +346,69 @@ Module FingerTrees.
   Proof.
     intros. induction xs.
     - reflexivity.
-    - simpl. rewrite @ft_reducer_addl with (op := cons) (F := fun x => x).
+    - simpl. rewrite (@ft_reducer_addl A (list A) (fun x => x) _ [] a _).
       apply f_equal. simpl in IHxs. assumption.
   Qed.
 
   (* Adam *)
 
-  Fixpoint dig_app3 {A:Type} (ds1 : digit A) (ds2 : list A) (ds3 : digit A): list A :=
-    to_list ds1 ++ ds2 ++ to_list ds3.
+  Inductive app3_list (A : Type) : Type :=
+  | app3_two  : A -> A -> app3_list A
+  | app3_three : A -> A -> A -> app3_list A
+  | app3_four  : A -> A -> A -> A -> app3_list A
+  | app3_more : A -> A -> A -> app3_list A -> app3_list A.
 
-  Fixpoint nodes {A : Type} (xs : list A) : list (node A) :=
+  Arguments app3_two {A} _ _.
+  Arguments app3_three {A} _ _ _.
+  Arguments app3_four {A} _ _ _ _.
+  Arguments app3_more {A} _ _ _ _.
+
+  Fixpoint a3_reducer {A B : Type} (op : A -> B -> B) (xs : app3_list A) (ys : B) : B :=
     match xs with
-    | [] => [] (* should never happen *)
-    | [x] => [] (* should never happen *)
-    | [a;b] => [node2 a b]
-    | [a;b;c] => [node3 a b c]
-    | a :: b :: c :: xs' => node3 a b c :: nodes xs'
+    | app3_two a b => op a (op b ys)
+    | app3_three a b c => op a (op b (op c ys))
+    | app3_four a b c d => op a (op b (op c (op d ys)))
+    | app3_more a b c xs' => op a (op b (op c (a3_reducer op xs' ys)))
     end.
 
-  Fixpoint app3 {A:Type} (tr1:fingertree A) (ds:list A) (tr2:fingertree A)
+  Fixpoint a3_reducel {A B : Type} (op : B -> A -> B) (ys : B) (xs : app3_list A) : B :=
+    match xs with
+    | app3_two a b => op (op ys a) b
+    | app3_three a b c => op (op (op ys a) b) c
+    | app3_four a b c d => op (op (op (op ys a) b) c) d
+    | app3_more a b c xs' => a3_reducel op (op (op (op ys a) b) c) xs'
+    end.
+
+  Instance a3_reduce : reduce app3_list :=
+    {|
+      reducer := @a3_reducer;
+      reducel := @a3_reducel;
+    |}.
+
+  Fixpoint dig_app3 {A:Type} (ds1 : digit A) (ds2 : app3_list A) (ds3 : digit A): app3_list A :=
+    match ds1, ds2, ds3 with
+    | one a, app3_two b c, one d => app3_four a b c d
+    | two a b, app3_two c d, one e => app3_more a b c (app3_two d e)
+    | three a b c, app3_two d e, one f => app3_more a b c (app3_three d e f)
+    | four a b c d, app3_two e f, one g => app3_more a b c (app3_four d e f g)
+    | one a, app3_three b c, one d => app3_four a b c d
+    | two a b, app3_three c d, one e => app3_more a b c (app3_two d e)
+    | three a b c, app3_three d e, one f => app3_more a b c (app3_three d e f)
+    | four a b c d, app3_three e f, one g => app3_more a b c (app3_four d e f g)
+
+
+    to_list ds1 ++ ds2 ++ to_list ds3.
+
+  Fixpoint nodes {A : Type} (xs : app3_list A) : list (node A) :=
+    match xs with
+    | app3_none => [] (* should never happen *)
+    | app3_two a b => [node2 a b]
+    | app3_three a b c => [node3 a b c]
+    | app3_four a b c d => [node2 a b; node2 c d]
+    | app3_more a b c xs' => node3 a b c :: nodes xs'
+    end.
+
+  Fixpoint app3 {A:Type} (tr1:fingertree A) (ds : list A) (tr2:fingertree A)
     : fingertree A :=
     match tr1, tr2 with
     | empty, _ => addl' ds tr2
@@ -430,13 +475,13 @@ Module FingerTrees.
     intros. simpl. apply f_equal. simpl in IHxs. apply IHxs.
   Qed.
 
-  Lemma to_list_fr_empty : forall {A : Type} op (xs ys : list A),
+  Lemma to_list_fr_empty : forall {A B : Type} op (xs : list A) (ys : B),
       ft_reducer op (addl' xs empty) ys = ft_reducer op (to_tree xs) ys.
   Proof.
     intros. reflexivity.
   Qed.
 
-  Lemma to_list_fr_single : forall {A : Type} a op (xs ys : list A),
+  Lemma to_list_fr_single : forall {A B : Type} a op (xs : list A) (ys : B),
       ft_reducer op (addl' xs (single a)) ys =
       ft_reducer op (to_tree xs) (op a ys).
   Proof.
@@ -447,7 +492,7 @@ Module FingerTrees.
       rewrite IHxs. reflexivity.
   Qed.
 
-  Lemma to_list_fr_deep : forall {A : Type} op (xs ys : list A) pf sf m,
+  Lemma to_list_fr_deep : forall {A B : Type} op (xs : list A) (ys : B) pf sf m,
       ft_reducer op (addl' xs (deep pf m sf)) ys =
       ft_reducer op (to_tree xs) (ft_reducer op (deep pf m sf) ys).
   Proof.
@@ -461,7 +506,7 @@ Module FingerTrees.
       rewrite IHxs. rewrite Heqys'. reflexivity.
   Qed.
 
-  Theorem ft_reducer_addl' : forall {A : Type} op (xs ys : list A) (tr : fingertree A),
+  Theorem ft_reducer_addl' : forall {A B : Type} op (xs : list A) (ys : B) (tr : fingertree A),
       ft_reducer op (addl' xs tr) ys =
       ft_reducer op (to_tree xs) (ft_reducer op tr ys).
   Proof.
@@ -471,7 +516,7 @@ Module FingerTrees.
     - rewrite to_list_fr_deep. reflexivity.
   Qed.
 
-  Theorem ft_reducer_addr' : forall { A : Type } op (xs ys : list A) (tr : fingertree A),
+  Theorem ft_reducer_addr' : forall {A B : Type} op (xs : list A) (ys : B) (tr : fingertree A),
       ft_reducer op (addr' tr xs) ys =
       ft_reducer op tr (ft_reducer op (to_tree xs) ys).
   Proof.
@@ -486,6 +531,68 @@ Module FingerTrees.
       simpl. reflexivity.
   Qed.
 
+  Lemma ft_reducer_deep : forall {A B : Type} op (m : fingertree (node A)) pf sf (ys : B),
+      ft_reducer op (deep pf m sf) ys = digit_reducer op pf (ft_reducer (nd_reducer op) m (digit_reducer op sf ys)).
+  Proof.
+    intros. reflexivity.
+  Qed.
+
+  Lemma app_sing : forall {A} (x y : A) xs, [x] = xs ++ [y] -> x = y /\ xs = [].
+  Proof.
+    intros. destruct xs; split.
+    - inversion H. reflexivity.
+    - reflexivity.
+    - inversion H. contradiction (app_cons_not_nil xs [] y H2).
+    - inversion H. contradiction (app_cons_not_nil xs [] y H2).
+  Qed.
+
+  Lemma nodes_to_list : forall {A B : Type} xs x1 x2 x3 x4 (op : A -> B -> B) ys,
+      reducer (nd_reducer op) (nodes (x1 :: x2 :: x3 :: x4 :: xs)) ys =
+      reducer op (x1 :: x2 :: x3 :: x4 :: xs) ys.
+  Proof.
+    intros A B xs. induction xs; intros; [reflexivity|].
+    
+    simpl. destruct xs; [reflexivity|].
+    destruct xs; [reflexivity |].
+    simpl in *. do 3 (apply f_equal).
+    intros A B xs x1 x2. remember (x1 :: x2 :: xs). induction l; intros.
+    - inversion Heql.
+    - simpl in *. inversion Heql. destruct xs eqn:Hxs.
+      + reflexivity.
+      + inversion Heql. subst. simpl in *.
+    - inversion Heql. destruct l.
+      + inversion H1.
+      + inversion H1. subst. simpl in *.
+    [reflexivity|].
+    - simpl in *. inversion Heql. subst.
+      simpl in IHl.
+    - simpl in *. destruct l.
+      + simpl.
+      + 
+
+
+  Lemma dig_app3_to_list : forall {A B : Type} (m : list A) (op : A -> B -> B) (pf sf : digit A) (ys : B),
+      ft_reducer (nd_reducer op) (to_tree (nodes (dig_app3 pf m sf))) ys =
+      digit_reducer op pf (ft_reducer op (to_tree m) (digit_reducer op sf ys)).
+  Proof.
+    intros A B. induction m; intros.
+    - destruct pf, sf; try reflexivity.
+    - unfold to_tree. destruct pf, sf; simpl.
+      + destruct (m ++ [a1]) eqn:Heq; symmetry in Heq; [contradiction (app_cons_not_nil m [] a1 Heq)|].
+        induction l. 
+        * simpl. rewrite (ft_reducer_addl _ _ a). 
+          destruct (app_sing a2 a1 m Heq). subst. reflexivity.
+        * 
+
+        destruct l; do 20 (try (destruct l)); simpl.
+
+        *  destruct (app_sing a2 a1 m Heq). subst.
+          reflexivity.
+        * rewrite (ft_reducer_addl _ _ a). . subst.
+          reflexivity.
+          
+         
+        * simpl. rewrite (ft_reducer_addl _ _ a). 
 
   (* problem is that the induction hyp wants op to be lifted
       into node, but it is not since digit_reducer.
@@ -500,22 +607,64 @@ Module FingerTrees.
     ft_reducer op tr1 (ft_reducer op (to_tree xs) (ft_reducer op tr2 ys)).
   Proof.
     intros A B op tr1.
-    Opaque addr' addl'. induction tr1; intros; simpl.
-    - rewrite (@ft_reducer_addl' A op xs ys tr2). reflexivity.
-    - destruct tr2.
+    Opaque addr' addl'. induction tr1; intros.
+    - simpl. rewrite (@ft_reducer_addl' A B op xs ys tr2). reflexivity.
+    - destruct tr2; simpl.
       + rewrite (ft_reducer_addr'). reflexivity.
-      + simpl. rewrite (ft_reducer_addl _ ys a op).
-        rewrite (@to_list_fr_single A a0 op xs). reflexivity.
       + rewrite (ft_reducer_addl _ ys a op).
-        rewrite (@to_list_fr_deep A op xs ys d d0 tr2).
+        rewrite (@to_list_fr_single A B a0 op xs). reflexivity.
+      + rewrite (ft_reducer_addl _ ys a op).
+        rewrite (@to_list_fr_deep A B op xs ys d d0 tr2).
         reflexivity.
-    - destruct tr2.
-      + rewrite ft_reducer_addr'. reflexivity.
-      + rewrite (ft_reducer_addr _ _ a op).
+    - destruct tr2. 
+      + simpl. rewrite ft_reducer_addr'. reflexivity.
+      + simpl. rewrite (ft_reducer_addr _ _ a op).
         rewrite ft_reducer_addr'. reflexivity.
-      + simpl.
+      + simpl in *.
+        rewrite IHtr1.
+        apply f_equal. rewrite <- ?ft_reducer_deep.
+                           
+        apply f_equal. destruct d0, d1; simpl.
+        * {destruct (xs ++ [a0]) eqn:Hxs.
+           - symmetry in Hxs. contradiction (app_cons_not_nil xs [] a0).
+           - destruct l.
+             + destruct xs; [simpl; inversion Hxs; reflexivity|].
+               inversion Hxs. symmetry in H1. contradiction (app_cons_not_nil xs [] a0).
+             + destruct l.
+               * {simpl. destruct xs; [inversion Hxs|].
+                  simpl. rewrite (ft_reducer_addl (fold_right addl empty xs)).
+                  inversion Hxs. destruct xs.
+                  - inversion H1. reflexivity.
+                  - inversion H1. symmetry in H3. contradiction (app_cons_not_nil xs [] a0).
+                  }
+               * {simpl. destruct l.
+                  - simpl. destruct xs; [inversion Hxs|].
+                    destruct xs; [inversion Hxs|].
+                    inversion Hxs. simpl. rewrite (ft_reducer_addl _ _ a1).
+                    rewrite (ft_reducer_addl _ _ a2).
+                    do 3 (apply f_equal).
+                    rewrite ft_reducer_addl'. simpl.
 
-        rewrite (IHtr1 (nd_reducer op) _ tr2 _ _).
+                     inversion Hxs. simpl.
+                  }
+
+          }
+       * 
+        specialize (IHtr1 op tr2' (nodes (dig_app3 d0' xs d1'))).
+      + rewrite IHtr1.
+        apply f_equal.
+        remember (ft_reducer (nd_reducer op) tr2 (digit_reducer op d2 ys)) as ys'.
+        
+
+        
+        destruct (nodes (dig_app3 d0 xs d1)) eqn:Heq. 
+
+        pose proof (ft_reducer_addl' op).
+        rewrite (H xs _ empty).
+        rewrite (H (nodes (dig_app3 d0 xs d1)) _ empty).
+        
+        simpl in H.
+        
       + rewrite @ft_reducer_addr with (F:= fun x => x)(op := cons).
         rewrite ft_reducer_addr'. simpl.
         rewrite <- digit_reducer_app; [| intros; reflexivity].
