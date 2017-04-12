@@ -41,6 +41,13 @@ Module FingerTrees.
       reducel := fun _ _ fn z xs => List.fold_left fn xs z;
     |}.
 
+  Instance id_reduce : reduce (fun A => A) :=
+    {|
+      reducer := fun _ _ fn xs z => fn xs z;
+      reducel := fun _ _ fn z xs => fn z xs
+    |}.
+
+
   Definition to_list {F: Type -> Type} {r: reduce F} {A : Type} (s : F A) : list A :=
     reducer (cons (A:=A)) s nil.
 
@@ -700,6 +707,7 @@ Module FingerTrees.
          simpl. reflexivity. Qed.
 
 
+
   Definition reverse_simple {A : Type} (tr:fingertree A) : fingertree A :=
     reducer (flip addr) tr empty.
   
@@ -748,6 +756,54 @@ Module FingerTrees.
     induction tr; intros; try reflexivity.
     destruct d, d0; simpl; try (rewrite IHtr); try reflexivity.
   Qed.
+
+  Lemma reverse_addl {A : Type} (tr : fingertree A) :
+    forall x fn, reverse_tree fn (x <| tr) = reverse_tree fn tr |> fn x.
+  Proof.
+    unfold reverse. induction tr; simpl in *; intros; try reflexivity.
+    destruct d; try reflexivity.
+    simpl in *. rewrite IHtr. reflexivity.
+  Qed.
+
+  Compute (reducel (flip cons) [] [1;2;3]).
+
+  Definition red_cons {A : Type} {F : Type -> Type} {r:reduce F} (x:F A) (xs:list A) :
+    list A := to_list x ++ xs.
+
+  Theorem reverse_reduce_list {A B : Type} (l : list A) :
+    forall acc, reducer cons l acc = reducel (flip cons) acc (rev l).
+  Proof.
+    induction l; intros; simpl; try reflexivity.
+    simpl in *. rewrite IHl. 
+    
+
+
+  Theorem reverse_reducer_inj {A : Type} (tr : fingertree A) :
+    forall B (op : A -> list B -> list B) acc fn,
+      reducer op (reverse_tree fn tr) acc =
+      reducel (flip cons) acc (reducer op (tree_map fn tr) []).
+  Proof.
+    unfold reverse. induction tr; intros.
+    - reflexivity.
+    - simpl. 
+    - Opaque rev tree_map. simpl in *.
+      specialize (IHtr (nd_reducer op) (digit_reducer op (reverse_digit fn d) acc)).
+      rewrite IHtr. Focus 2.
+      intros. destruct d.
+      + simpl.  split.
+        * {destruct a.
+           - simpl. destruct (H a1), (H a). 
+           }
+
+        * simpl.
+  Theorem reverse_reducer_inj {A : Type} {F : Type -> Type} (tr : fingertree (F A)) :
+    forall fn (lift : (A -> list A -> list A) -> (F A -> list A -> list A)) acc,
+      reducer (cons) (reverse_tree fn tr) (rev acc) =
+      rev acc ++ rev (reducer (cons) tr []).
+  Proof.
+    induction tr; intros; simpl in *.
+    - symmetry. apply app_nil_r.
+    - 
 
   Lemma map_reverse_simpl {A : Type} (tr : fingertree A) :
     forall B (f : A -> B) (acc : fingertree A) (op : forall {C}, C -> fingertree C -> fingertree C)
