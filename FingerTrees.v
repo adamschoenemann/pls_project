@@ -628,6 +628,15 @@ Module FingerTrees.
   Qed.
 
       
+  Class reversable F := Reversable {
+                            mirror {A:Type} (fn:A -> A) : (F A) -> F A
+                          }.
+
+  Instance reversable_id : reversable (fun A => A) :=
+    {|
+      mirror := fun _ _ x => x
+    |}.
+
 
   (* Oscar *)
     Fixpoint reverse_node {A: Type}
@@ -635,8 +644,13 @@ Module FingerTrees.
       match n with
       | (node2  a b)  => node2 (f b) (f a)
       | (node3 a b c) => node3 (f c) (f b) (f a)
-    end.
-    
+      end.
+
+  Instance reversable_node : reversable node :=
+    {|
+      mirror := @reverse_node;
+    |}.
+
    
   Fixpoint reverse_digit {A: Type}
            (f: A -> A) (d: digit A): digit A  :=
@@ -646,8 +660,13 @@ Module FingerTrees.
     | three a b c  => three (f c) (f b) (f a)
     | four a b c d => four (f d) (f c) (f b) (f a)
     end.
+
+  (* Instance reversable_digit : reversable digit := *)
+  (*   {| *)
+  (*     mirror := @reverse_digit; *)
+  (*   |}. *)
   
-  Fixpoint reverse_tree {A: Type}
+  Fixpoint reverse_tree {A: Type} 
            (f: A -> A)(tr: fingertree A) : fingertree A :=
     match tr with
     | empty        => empty
@@ -656,6 +675,11 @@ Module FingerTrees.
       deep (reverse_digit f sf) (reverse_tree (reverse_node f) m)
            (reverse_digit f pr)
     end.
+
+  (* Instance reversable_tree : reversable fingertree := *)
+  (*   {| *)
+  (*     mirror := @reverse_tree; *)
+  (*   |}. *)
     
 
   Definition reverse {A: Type} : fingertree A -> fingertree A :=
@@ -673,25 +697,99 @@ Module FingerTrees.
     reverse (deep (two 0 1) (single (node2 2 3)) (three 4 5 6)) =
             deep (three 6 5 4) (single (node2 3 2)) (two 1 0).
   Proof. unfold reverse. unfold reverse_tree. unfold reverse_digit.
-  simpl. reflexivity. Qed.
+         simpl. reflexivity. Qed.
 
 
   Definition reverse_simple {A : Type} (tr:fingertree A) : fingertree A :=
-    reducel (flip addl) empty tr.
+    reducer (flip addr) tr empty.
   
   Compute (reverse_simple (to_tree [1;2;3;4;5;6;7;8;9;10])).
-  Lemma reverse_reverse_simple {A B: Type}
-        (tr: fingertree (node A))
-        (op : (node A) -> B -> B) acc (fn : A -> A) :
-    reducer op (reverse_tree (reverse_node fn) tr) acc =
-    reducer op (reverse_simple tr) acc.
+
+  Compute (reducer cons (reverse_tree (reverse_node (fun x => x)) (single (node2 1 2))) []).
+  Compute (to_list (reverse_simple (single (node2 1 2)))).
+
+
+  Definition node_map {A B : Type} (f : A -> B) (nd : node A) : node B :=
+    match nd with
+    | node2 a b => node2 (f a) (f b)
+    | node3 a b c => node3 (f a) (f b) (f c)
+    end.
+
+  Definition digit_map {A B : Type} (f : A -> B) (d : digit A) : digit B :=
+    match d with
+    | one a => one (f a)
+    | two a b => two (f a) (f b)
+    | three a b c => three (f a) (f b) (f c)
+    | four a b c d => four (f a) (f b) (f c) (f d)
+    end.
+
+  Fixpoint tree_map {A B : Type} (f : A -> B) (tr : fingertree A) : fingertree B :=
+    match tr with
+    | empty => empty
+    | single x => single (f x)
+    | deep pf m sf => deep (digit_map f pf) (tree_map (node_map f) m) (digit_map f sf)
+    end.
+
+
+  Example map_tree_ex01 :
+    to_list (tree_map (plus 1) (to_tree [1;2;3;4;5])) = [2;3;4;5;6].
+  Proof. reflexivity. Qed.
+
+  Lemma map_addl {A : Type} (tr : fingertree A) :
+    forall B (f: A -> B) x, tree_map f (x <| tr) = f x <| tree_map f tr.
   Proof.
-    destruct tr.
-    - reflexivity.
-    - simpl. unfold reverse_
-    induction tr; intros; unfold reverse_simple; simpl in *; try reflexivity.
-    unfold reverse in *.
+    induction tr; intros; try reflexivity.
+    destruct d, d0; simpl; try (rewrite IHtr); try reflexivity.
+  Qed.
+
+  Lemma map_addr {A : Type} (tr : fingertree A) :
+    forall B (f: A -> B) x, tree_map f (tr |> x) = tree_map f tr |> f x .
+  Proof.
+    induction tr; intros; try reflexivity.
+    destruct d, d0; simpl; try (rewrite IHtr); try reflexivity.
+  Qed.
+
+  Lemma map_reverse_simpl {A : Type} (tr : fingertree A) :
+    forall B (f : A -> B) (acc : fingertree A) (op : forall {C}, C -> fingertree C -> fingertree C)
+      (pf : forall a acc, op (f a) (tree_map f acc) = tree_map f (op a acc)),
+      reducer op (tree_map f tr) (tree_map f acc) =
+      tree_map f (reducer op tr acc).
+  Proof.
+    induction tr; intros; simpl in *; try reflexivity.
+    - apply pf.
+    - specialize (IHtr (node B) (node_map f) _ (fun T => nd_reducer (op T))).
       
+    - destruct d, d0; simpl in *.
+      + rewrite (IHtr _ (node_map f) (op B (f a0) (tree_map f acc))).
+     [unfold flip; rewrite map_addr; reflexivity|].
+    - 
+    unfold reverse_simple in *. simpl in *.
+
+  (**
+     We need to map the fn over the tree because the tree data-type is non-regular.
+  **)
+  Lemma reverse_reverse_simple {A B: Type} (tr: fingertree A) :
+    forall (op : A -> B -> B) acc (fn : A -> A),
+    reducer op (reverse_tree fn tr) acc =
+    reducer op (reverse_simple (tree_map fn tr)) acc.
+  Proof.
+    induction tr; try reflexivity.
+    intros. simpl in *. rewrite IHtr. simpl.
+    unfold reverse_simple, reducer, flip. simpl.
+    destruct d, d0; try reflexivity.
+    - simpl in *. 
+      rewrite (ft_reducer_addr _ _ (fn a) _).
+      simpl.
+      destruct tr; try reflexivity.
+      + destruct n; reflexivity.
+      + rewrite IHtr. simpl.
+      rewrite (ft_reducer_addr _ _ _ _).
+      
+    - unfold reverse_simple. unfold reducer. simpl.
+      
+    remember (digit_reducer op (reverse_digit fn d) acc) as acc'.
+    specialize (IHtr (nd_reducer op) acc' (reverse_node fn)).
+    rewrite IHtr.
         
   Theorem tree_reverse_reduce {A B : Type} (tr: fingertree A) :
           forall (xs : B) (op: A -> B -> B) fn,
