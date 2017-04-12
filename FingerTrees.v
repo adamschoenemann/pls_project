@@ -2,6 +2,7 @@ Require Import Coq.Arith.Arith.
 Require Import Coq.Arith.EqNat.
 Require Import Coq.omega.Omega.
 Require Import Coq.Lists.List.
+Require Import Basics.   
 
 Module FingerTrees.
 
@@ -85,8 +86,8 @@ Module FingerTrees.
 
   Definition nd_reducel {A B : Type} : (B -> A -> B) -> B -> node A -> B :=
     fun op z nd => match nd with
-                | node2 a b => op (op z b) a
-                | node3 a b c => op (op (op z c) b) a
+                | node2 b a => op (op z b) a
+                | node3 c b a => op (op (op z c) b) a
                 end.
 
   Lemma nd_reducer_app :
@@ -114,9 +115,9 @@ Module FingerTrees.
   Definition digit_reducel {A B : Type} (op: B -> A -> B) z dg :=
     match dg with
     | one a => op z a
-    | two a b => op (op z a) b
-    | three a b c => op (op (op z a) b) c
-    | four a b c d => op (op (op (op z a) b) c) d
+    | two b a => op (op z b) a
+    | three c b a => op (op (op z c) b) a
+    | four d c b a => op (op (op (op z d) c) b) a
     end.
 
   Instance digit_reduce : reduce digit :=
@@ -629,29 +630,28 @@ Module FingerTrees.
       
 
   (* Oscar *)
-    Fixpoint reverse_node {A: Type}{B: Type}
-             (f: A -> B) (n: node A): node B  :=
+    Fixpoint reverse_node {A: Type}
+             (f: A -> A) (n: node A): node A  :=
       match n with
-      | (node2  a b) => node2 (f b) (f a)
+      | (node2  a b)  => node2 (f b) (f a)
       | (node3 a b c) => node3 (f c) (f b) (f a)
     end.
     
    
-
-  Fixpoint reverse_digit {A: Type}{B: Type}
-           (f: A -> B) (d: digit A): digit B  :=
+  Fixpoint reverse_digit {A: Type}
+           (f: A -> A) (d: digit A): digit A  :=
     match d with
-    | one a => one (f a)
-    | two a b => two (f b) (f a)
-    | three a b c => three (f c) (f b) (f a)
+    | one a        => one (f a)
+    | two a b      => two (f b) (f a)
+    | three a b c  => three (f c) (f b) (f a)
     | four a b c d => four (f d) (f c) (f b) (f a)
     end.
   
   Fixpoint reverse_tree {A: Type}
            (f: A -> A)(tr: fingertree A) : fingertree A :=
     match tr with
-    | empty => empty
-    | single x => single (f x)
+    | empty        => empty
+    | single x     => single (f x)
     | deep pr m sf =>
       deep (reverse_digit f sf) (reverse_tree (reverse_node f) m)
            (reverse_digit f pr)
@@ -675,14 +675,38 @@ Module FingerTrees.
   Proof. unfold reverse. unfold reverse_tree. unfold reverse_digit.
   simpl. reflexivity. Qed.
 
- 
-  Theorem tree_reverse {A : Type} (tr : fingertree A) :
-    to_list (reverse tr) = rev (to_list tr).
+
+  Definition reverse_simple {A : Type} (tr:fingertree A) : fingertree A :=
+    reducel (flip addl) empty tr.
+  
+  Compute (reverse_simple (to_tree [1;2;3;4;5;6;7;8;9;10])).
+  Lemma reverse_reverse_simple {A B: Type}
+        (tr: fingertree (node A))
+        (op : (node A) -> B -> B) acc (fn : A -> A) :
+    reducer op (reverse_tree (reverse_node fn) tr) acc =
+    reducer op (reverse_simple tr) acc.
   Proof.
-    intros. induction tr; intros; try reflexivity.
+    destruct tr.
+    - reflexivity.
+    - simpl. unfold reverse_
+    induction tr; intros; unfold reverse_simple; simpl in *; try reflexivity.
+    unfold reverse in *.
+      
+        
+  Theorem tree_reverse_reduce {A B : Type} (tr: fingertree A) :
+          forall (xs : B) (op: A -> B -> B) fn,
+    reducer op (reverse_tree fn tr) xs = reducel (flip op) xs tr.
+  Proof.
+    induction tr; intros; simpl in *; try reflexivity.
+
+    Theorem tree_reverse {A : Type} (tr : fingertree A) :
+    reducer cons (reverse tr) [] = rev (redu.
+  Proof.
+    intros. induction tr; intros; simpl; try reflexivity.
+    simpl in *.
     simpl. destruct (reverse_digit (fun x : A => x) d0).
     - destruct d, d0.
-      + simpl.  (* apply ft_reducer_app *)
+      + simpl in *.  (* apply ft_reducer_app *)
   
     
   Theorem tree_reverse_idem {A : Type} ...
