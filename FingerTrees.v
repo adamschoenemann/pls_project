@@ -294,6 +294,8 @@ Module FingerTrees.
   (* if you add an x to the left of a tree tr and then convert it to a list, it is
      the same as converting tr to a list and then consing x.
      This is the general version of the above.
+     to_list (x <| tr) = x :: (to_list tr) <=>
+     ft_reducer cons (x <| tr) [] = cons x (tr_reducer cons tr [])
   *)
   Lemma ft_reducer_addl : forall {A B : Type}  {F : Type -> Type}
                          (tr : fingertree (F A)) xs x
@@ -523,11 +525,15 @@ Module FingerTrees.
     intros. reflexivity.
   Qed.
 
+  (**
+     to_list (nodes xs) = xs
+     reducer (nd_reducer cons) [] = xs
+  **)
   Lemma nodes_reducer : forall {A B : Type} xs (op : A -> B -> B) ys,
       reducer (nd_reducer op) (nodes xs) ys =
       reducer op xs ys.
   Proof.
-    intros A B xs. induction xs; intros; simpl in *; try reflexivity.
+    induction xs; intros; simpl in *; try reflexivity.
     rewrite IHxs. reflexivity.
   Qed.
 
@@ -562,14 +568,14 @@ Module FingerTrees.
     ft_reducer op tr1 (ft_reducer op (to_tree xs) (ft_reducer op tr2 ys)).
   Proof.
     intros A B op tr1.
-    Opaque addr' addl'. induction tr1; intros.
-    - simpl. rewrite (@ft_reducer_addl' A B op xs ys tr2). reflexivity.
+    Opaque addl' addr'. induction tr1; intros.
+    - simpl. rewrite (ft_reducer_addl' op xs ys tr2). reflexivity.
     - destruct tr2; simpl.
       + rewrite (ft_reducer_addr'). reflexivity.
       + rewrite (ft_reducer_addl _ ys a op).
-        rewrite (@to_list_fr_single A B a0 op xs). reflexivity.
+        rewrite (to_list_fr_single a0 op xs). reflexivity.
       + rewrite (ft_reducer_addl _ ys a op).
-        rewrite (@to_list_fr_deep A B op xs ys d d0 tr2).
+        rewrite (to_list_fr_deep op xs ys d d0 tr2).
         reflexivity.
     - destruct tr2. 
       + simpl. rewrite ft_reducer_addr'. reflexivity.
@@ -602,7 +608,22 @@ Module FingerTrees.
                                 (op : A -> B -> B) ys,
   reducer op (tr1 >< (tr2 >< tr3)) ys = reducer op ((tr1 >< tr2) >< tr3) ys.
   Proof.
-    intros A B tr1. unfold "><". induction tr1; intros; rewrite ?app3_to_list; reflexivity.
+    intros A B tr1. unfold "><".
+    induction tr1; intros; rewrite ?app3_to_list; reflexivity.
+  Qed.
+
+  Theorem tree_append_assoc_to_list :
+    forall {A B : Type} (tr1 tr2 tr3 : fingertree A),
+      to_list (tr1 >< (tr2 >< tr3)) = to_list ((tr1 >< tr2) >< tr3).
+  Proof.
+    intros. simpl. apply tree_append_assoc.
+  Qed.
+
+  Theorem tree_append_assoc_sum :
+    forall {A : Type} (tr1 tr2 tr3 : fingertree nat),
+      reducer plus (tr1 >< (tr2 >< tr3)) 0 = reducer plus ((tr1 >< tr2) >< tr3) 0.
+  Proof.
+    intros. simpl. apply tree_append_assoc.
   Qed.
 
       
