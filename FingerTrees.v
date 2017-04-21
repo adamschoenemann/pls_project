@@ -776,6 +776,8 @@ Module FingerTrees.
     | S n' => node (node_lift n' A)
     end.
 
+  Compute node_lift 3 nat.
+
   Fixpoint rev_lift (n:nat) {A:Type} (fn: A -> A) : (node_lift n A -> node_lift n A) :=
     match n with
     | O => fn
@@ -789,10 +791,83 @@ Module FingerTrees.
     | S n' => nd_reducer (nd_red_lift n' op)
     end.
 
-  Lemma rev_reducer {A  : Type} {F : Type -> Type} (tr : fingertree (F A)) :
-    forall x (op : F A -> list A -> list A) acc,
-    rev (reducer op tr (op x acc)) =
-    op x (rev (reducer op tr acc)).
+  Fixpoint tree_reducer {A B : Type} {n : nat}
+           (op : A -> B -> B)
+           (tr : fingertree (node_lift n A))
+           (acc : B) : B :=
+    match tr with
+    | empty => acc
+    | single x => (nd_red_lift n op) x acc
+    | deep pf m sf => acc
+    end.
+
+  Check fingertree_ind.
+  Check deep.
+
+  Theorem fingertree_lift_ind
+     : forall P : (forall (n : nat) (A : Type), fingertree (node_lift n A) -> Prop),
+       (forall (n:nat) (A : Type), P n A empty) ->
+       (forall (n:nat) (A : Type) (a : node_lift n A), P n A (single a)) ->
+       (forall (n:nat) (A : Type) (d : digit (node_lift n A))
+          (f1 : fingertree (node_lift (S n) A)),
+        P (S n) A f1 -> forall d0 : digit (node_lift n A), P n A (deep d f1 d0)) ->
+       forall (n:nat) (A : Type) (f2 : fingertree (node_lift n A)), P n A f2.
+  Proof.
+    Admitted.
+
+  Lemma reverse_rev_lem' {A : Type} (n : nat) (tr : fingertree (node_lift n A)) :
+    forall (acc : list A) ,
+      reducer (nd_red_lift n cons) (reverse_simple tr) acc =
+      rev (reducer (nd_red_lift n cons) tr []) ++ acc.
+  Proof.
+    apply fingertree_lift_ind with (f2 := tr); intros; simpl in *.
+    - reflexivity.
+    - induction n0; simpl in *.
+      + reflexivity.
+      + destruct a; simpl in *.
+        * rewrite IHn0. 
+
+  Lemma reverse_rev {A B : Type} (tr : fingertree A) :
+    forall acc (op : A -> list B -> list B),
+      reducer op (reverse tr) acc = rev (reducer op tr []) ++ acc.
+  Proof.
+    induction tr; intros; simpl.
+    - reflexivity.
+    - reflexivity.
+    - simpl in IHtr.
+
+  Lemma reverse_rev_lem {A : Type} (tr : fingertree A) :
+    forall fn (op : A -> list A -> list A) acc,
+      reducer op (reverse_tree fn tr) acc = rev (reducer op tr []) ++ acc.
+  Proof.
+    unfold reverse. induction tr; intros; simpl.
+    - reflexivity.
+    - Abort.
+
+    
+    induction tr.
+
+  Lemma reverse_rev_lem'' {A : Type} (n : nat) (tr : fingertree (node_lift n A)) :
+    forall (op : A -> list A -> list A) (acc : list A) ,
+      reducer (nd_red_lift n op) (reverse_tree (rev_lift n (fun x => x)) tr) acc =
+      rev (reducer (nd_red_lift n op) tr []) ++ acc.
+  Proof.
+    induction tr.
+
+
+
+
+  Lemma rev_lift_lem {A : Type} (n:nat) :
+    forall (tr : fingertree (node_lift n A)),
+      reducer (nd_red_lift n cons) tr [] =
+      reducer (nd_red_lift n cons) tr [].
+  Proof.
+    induction tr.
+
+  Lemma rev_reducer {A B : Type} {F : Type -> Type} (tr : fingertree (F A)) :
+    forall x y (red_op : F A -> list B -> list B) (op : A -> list B -> list B),
+    rev (op x (reducer red_op tr (op y []))) =
+    rev (op y []) ++ rev (reducer red_op tr []) ++ rev (op x []).
   Proof.
     Admitted.
 
@@ -803,25 +878,24 @@ Module FingerTrees.
     - rewrite <- H. reflexivity.
   Qed.
 
-  Theorem reverse_inj {A : Type} {F : Type -> Type} (tr : fingertree (F A)) :
-    forall (r : reduce F) (acc : list A),
-      reducer (reducer cons) (reverse_simple tr) acc =
-      rev (reducer (reducer cons) tr []) ++ acc.
+  Theorem reverse_inj (n : nat)  :
+    forall (A B : Type) (tr : fingertree A) fn (op : A -> list B -> list B) acc,
+      (forall x acc, reducer op (fn x) acc = rev (reducer op x []) ++ acc) ->
+      reducer op (reverse_tree fn tr) acc =
+      rev (reducer op tr []) ++ acc.
+      (* ft_reducer (nd_red_lift n cons) *)
+      (*         (reverse_tree (A:=node_lift n A) (rev_lift n (fun x => x)) tr) [] = *)
   Proof.
     induction tr; intros; simpl in *.
     - reflexivity.
-    - 
+    - intros. simpl in *. rewrite H. reflexivity.
+    - intros. simpl in *. rewrite IHtr.
+      destruct d0, d;
+        simpl in *; rewrite 2!H; pose proof (@rev_reducer A B);
+          simpl in H0.
+      + rewrite (H0 node tr a0 a _ op). rewrite ?app_assoc. reflexivity.
+      + rewrite IHtr.
 
-  Theorem reverse_inj (n : nat)  :
-    forall (A : Type) (tr : fingertree (node_lift n A)),
-      ft_reducer (nd_red_lift n cons)
-              (reverse_simple (rev_lift n (fun x => x)) tr) [] =
-      rev (ft_reducer (nd_red_lift n cons) tr []).
-  Proof.
-    intros. induction n. 
-    - simpl. induction tr.
-    - reflexivity.
-    - simpl in *.
 
   Theorem reverse_inj {A : Type} {F : Type -> Type} (tr : fingertree (F A)) :
     forall (op : F A -> list A -> list A) (fn : F A -> F A) (acc : list A),
