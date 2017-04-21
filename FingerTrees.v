@@ -3,6 +3,7 @@ Require Import Coq.Arith.EqNat.
 Require Import Coq.omega.Omega.
 Require Import Coq.Lists.List.
 Require Import Basics.   
+Require Import Logic.JMeq.
 
 Module FingerTrees.
 
@@ -804,6 +805,32 @@ Module FingerTrees.
   Check fingertree_ind.
   Check deep.
 
+  Lemma node_lift_eq (A : Type) (n : nat) :
+    node_lift n (node A) = node (node_lift n A).
+  Proof.
+    induction n.
+    - reflexivity.
+    - simpl in *. rewrite IHn. reflexivity.
+  Qed.
+
+  Lemma node_lift_tr {A : Type} (n : nat)
+             (tr : fingertree (node_lift n (node A))) :
+    fingertree (node (node_lift n A)).
+  Proof. rewrite node_lift_eq in tr. assumption.
+  Defined.
+
+  Definition node_lift_JMeq {A : Type} : JMeq (node_lift 1 A) (node A) :=
+    JMeq_refl.
+
+
+  Lemma P_node_lift {A : Type} :
+    forall (P : forall (n : nat) (A : Type), fingertree (node_lift n A) -> Prop)
+      (n : nat) tr, (P n (node A) tr) -> (P (S n) A (node_lift_tr n tr)).
+  Proof.
+    intros. simpl in *. induction n.
+    - simpl in *.
+
+
   Theorem fingertree_lift_ind
      : forall P : (forall (n : nat) (A : Type), fingertree (node_lift n A) -> Prop),
        (forall (n:nat) (A : Type), P n A empty) ->
@@ -813,7 +840,13 @@ Module FingerTrees.
         P (S n) A f1 -> forall d0 : digit (node_lift n A), P n A (deep d f1 d0)) ->
        forall (n:nat) (A : Type) (f2 : fingertree (node_lift n A)), P n A f2.
   Proof.
-    Admitted.
+    induction n.
+    - intros. simpl in *. induction f2.
+      + apply H.
+      + apply H0.
+      + apply H1. pose proof (node_lift_tr f2).
+        pose proof (JMeq_eq H2).
+    
 
   Lemma rev_rev_app_distr : forall {A} (xs ys : list A), rev xs ++ ys = rev (rev ys ++ xs).
   Proof.
