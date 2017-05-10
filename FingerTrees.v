@@ -813,23 +813,29 @@ Module FingerTrees.
     - simpl in *. rewrite IHn. reflexivity.
   Qed.
 
-  Lemma node_lift_tr {A : Type} (n : nat)
+  Program Fixpoint node_lift_tr {A : Type} (n : nat)
              (tr : fingertree (node_lift n (node A))) :
-    fingertree (node (node_lift n A)).
-  Proof. rewrite node_lift_eq in tr. assumption.
+    fingertree (node (node_lift n A)) :=
+    match n with
+    | O => _
+    | S n' => _
+    end.
+  Next Obligation.
+    simpl in *. rewrite node_lift_eq in tr. assumption.
   Defined.
+
+  (* Proof. rewrite node_lift_eq in tr. assumption. *)
+  (* Defined. *)
+
 
   Definition node_lift_JMeq {A : Type} : JMeq (node_lift 1 A) (node A) :=
     JMeq_refl.
 
-
   Lemma P_node_lift {A : Type} :
     forall (P : forall (n : nat) (A : Type), fingertree (node_lift n A) -> Prop)
-      (n : nat) tr, (P n (node A) tr) -> (P (S n) A (node_lift_tr n tr)).
+      (n : nat) tr, JMeq (P n (node A) tr) (P (S n) A (node_lift_tr n tr)).
   Proof.
-    intros. simpl in *. induction n.
-    - simpl in *.
-
+    intros. Abort.
 
   Theorem fingertree_lift_ind
      : forall P : (forall (n : nat) (A : Type), fingertree (node_lift n A) -> Prop),
@@ -837,16 +843,18 @@ Module FingerTrees.
        (forall (n:nat) (A : Type) (a : node_lift n A), P n A (single a)) ->
        (forall (n:nat) (A : Type) (d : digit (node_lift n A))
           (f1 : fingertree (node_lift (S n) A)),
-        P (S n) A f1 -> forall d0 : digit (node_lift n A), P n A (deep d f1 d0)) ->
+           P (S n) A f1 -> forall d0 : digit (node_lift n A), P n A (deep d f1 d0)) ->
+       (forall (n:nat) (A : Type) tr, P n (node A) tr -> P (S n) A (node_lift_tr n tr)) ->
        forall (n:nat) (A : Type) (f2 : fingertree (node_lift n A)), P n A f2.
   Proof.
     induction n.
     - intros. simpl in *. induction f2.
       + apply H.
       + apply H0.
-      + apply H1. pose proof (node_lift_tr f2).
-        pose proof (JMeq_eq H2).
-    
+      + apply H1. specialize (H2 0 A). unfold node_lift_tr in H2. simpl in H2.
+        specialize (H2 f2 IHf2). apply H2.
+    - intros. simpl in *. induction f2.
+        
 
   Lemma rev_rev_app_distr : forall {A} (xs ys : list A), rev xs ++ ys = rev (rev ys ++ xs).
   Proof.
