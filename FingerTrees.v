@@ -4,6 +4,7 @@ Require Import Coq.omega.Omega.
 Require Import Coq.Lists.List.
 Require Import Basics.   
 Require Import Logic.JMeq.
+Require Import Coq.Logic.FunctionalExtensionality.
 
 Module FingerTrees.
 
@@ -19,6 +20,20 @@ Module FingerTrees.
     idL: forall x, mappend id x = x;
     idR: forall x, mappend x id = x;
   }.
+
+  Definition compose {A B C : Type} (f : B -> C) (g : A -> B) : A -> C := fun x => f (g x).
+
+  Notation "f << g" := (compose f g)
+                     (at level 58, right associativity).
+
+  Class functor F := Functor {
+    map : forall {A B : Type}, (A -> B) -> F A -> F B;
+
+    map_id : forall {A : Type} fn (f : F A), (forall x, fn x = x) -> map fn f = f;
+    map_comp : forall {A B C : Type} (f : B -> C) (g : A -> B) (x : F A),
+        map (f << g) x = (map f << map g) x;
+  }.
+
 
   Instance nat_plus_monoid : monoid nat :=
     {|
@@ -42,11 +57,6 @@ Module FingerTrees.
       reducel := fun _ _ fn z xs => List.fold_left fn xs z;
     |}.
 
-  Instance id_reduce : reduce (fun A => A) :=
-    {|
-      reducer := fun _ _ fn xs z => fn xs z;
-      reducel := fun _ _ fn z xs => fn z xs
-    |}.
 
 
   Definition to_list {F: Type -> Type} {r: reduce F} {A : Type} (s : F A) : list A :=
@@ -112,6 +122,19 @@ Module FingerTrees.
       reducel := @nd_reducel;
     |}.
 
+  Instance node_functor : functor node :=
+    {|
+      map := fun _ _ fn x => match x with
+                          | node2 a b => node2 (fn a) (fn b)
+                          | node3 a b c => node3 (fn a) (fn b) (fn c)
+                          end;
+
+    |}.
+  Proof.
+    - intros. destruct f; simpl; rewrite !H; reflexivity.
+    - intros. destruct x; simpl; unfold "<<"; reflexivity.
+  Qed.
+
   Definition digit_reducer {A B : Type} (op: A -> B -> B) dg z := 
     match dg with
     | one a => op a z
@@ -133,6 +156,21 @@ Module FingerTrees.
       reducer := @digit_reducer;
       reducel := @digit_reducel;
     |}.
+
+  Instance digit_functor : functor digit :=
+    {|
+      map := fun _ _ fn x => match x with
+                          | one a => one (fn a)
+                          | two a b => two (fn a) (fn b)
+                          | three a b c => three (fn a) (fn b) (fn c)
+                          | four a b c d => four (fn a) (fn b) (fn c) (fn d)
+                          end;
+
+    |}.
+  Proof.
+    - intros. destruct f; simpl; rewrite !H; reflexivity.
+    - intros. destruct x; simpl; unfold "<<"; reflexivity.
+  Qed.
 
   Fixpoint ft_reducer {A:Type} {B:Type}
              (op: A -> B -> B) (tr : fingertree A) (z : B) : B :=
@@ -161,6 +199,53 @@ Module FingerTrees.
       reducer := @ft_reducer;
       reducel := @ft_reducel;
     |}.
+
+  Fixpoint ft_map {A B : Type} (fn : A -> B) (tr : fingertree A) : fingertree B :=
+    match tr with
+    | empty => empty
+    | single a => single (fn a)
+    | deep pf m sf =>
+      deep (map fn pf)
+            (ft_map (map fn) m)
+            (map fn sf)
+    end.
+
+  Lemma ft_map_id : forall (A : Type) (fn : A -> A) (f : fingertree A),
+  (forall x : A, fn x = x) -> ft_map fn f = f.
+  Proof.
+    intros. induction f; simpl in *; intros.
+    + reflexivity.
+    + rewrite H. reflexivity.
+    + rewrite !map_id; [| assumption | assumption].
+      rewrite IHf; [reflexivity | intros; apply map_id; assumption].
+  Qed.
+
+  Lemma ft_map_comp : forall (A B C : Type) (f : B -> C) (g : A -> B) h (x : fingertree A),
+                        (forall x, h x = (f << g) x) ->
+      ft_map h x = (ft_map f << ft_map g) x.
+  Proof.
+    intros. generalize dependent B. generalize dependent C. induction x.
+    - intros. unfold "<<". simpl. reflexivity.
+    - intros. simpl. rewrite H. unfold "<<". simpl. reflexivity.
+    - intros. simpl. unfold "<<" in *.
+      pose proof (functional_extensionality h (f << g) H).
+      specialize (IHx _ (map h) _ (map f) (map g)).
+      simpl. rewrite IHx. rewrite H0.
+      rewrite !map_comp. unfold "<<". reflexivity.
+      + intros. replace (map f (map g x0)) with ((map f << map g) x0).
+        * rewrite <- map_comp.
+          rewrite H0. reflexivity.
+        * unfold "<<". reflexivity.
+  Qed.
+
+  Instance ft_functor : functor fingertree :=
+    {|
+      map := @ft_map;
+      map_id := ft_map_id;
+    |}.
+  Proof.
+    intros. apply ft_map_comp. intros. reflexivity.
+  Qed.
 
   Fixpoint addl {A:Type} (a:A) (tr:fingertree A) : fingertree A  :=
     match tr with
@@ -238,6 +323,12 @@ Module FingerTrees.
     | nil_l => True
     | cons_l _ _ => False
     end.
+
+  Definition tree_eq {A : Type} (t1 t2 : fingertree A) :=
+    forall (B : Type) (acc : B) (op : A -> B -> B), reducer op t1 acc = reducer op t2 acc.
+                                                           
+  Notation "t1 >=< t2" := (tree_eq t1 t2)
+                            (at level 60, right associativity).
 
   Lemma view_l_nil_empty : forall {A : Type} (tr : fingertree A), view_l tr = nil_l <-> tr = empty.
   Proof.
@@ -758,6 +849,13 @@ Module FingerTrees.
     destruct d, d0; simpl; try (rewrite IHtr); try reflexivity.
   Qed.
 
+  Lemma tree_map_comp {A B C : Type} (tr : fingertree A) :
+    forall (f : B -> C) (g : A -> B),
+      tree_map (fun x => f (g x)) tr = tree_map f (tree_map g tr).
+  Proof. Abort.
+
+  (* other functor laws here! *)
+
   Lemma reverse_addl {A : Type} (tr : fingertree A) :
     forall x fn, reverse_tree fn (x <| tr) = reverse_tree fn tr |> fn x.
   Proof.
@@ -856,7 +954,7 @@ Module FingerTrees.
        (forall (n:nat) (A : Type) (d : digit (node_lift n A))
           (f1 : fingertree (node_lift (S n) A)),
            P (S n) A f1 -> forall d0 : digit (node_lift n A), P n A (deep d f1 d0)) ->
-       (forall (n:nat) (A : Type) tr, P n (node A) tr -> P (S n) A (node_lift_tr n tr)) ->
+       (forall (n:nat) (A : Type) tr, P n (node A) tr <-> P (S n) A (node_lift_tr n tr)) ->
        forall (n:nat) (A : Type) (f2 : fingertree (node_lift n A)), P n A f2.
   Proof.
     induction n.
@@ -864,8 +962,8 @@ Module FingerTrees.
       + apply H.
       + apply H0.
       + apply H1. specialize (H2 0 A). unfold node_lift_tr in H2. simpl in H2.
-        apply (H2 f2 IHf2). 
-    - intros. simpl in *. Abort.
+        destruct (H2 f2). apply (H3 IHf2).
+    - intros. simpl in *. revert f2. Admitted.
 
 
   Lemma rev_rev_app_distr : forall {A} (xs ys : list A), rev xs ++ ys = rev (rev ys ++ xs).
@@ -988,11 +1086,6 @@ Module FingerTrees.
     destruct d; intros; simpl in *; rewrite !rev_node_lem; reflexivity.
   Qed.
 
-  Definition tree_eq {A : Type} (t1 t2 : fingertree A) :=
-    forall (B : Type) (acc : B) (op : A -> B -> B), reducer op t1 acc = reducer op t2 acc.
-                                                           
-  Notation "t1 >=< t2" := (tree_eq t1 t2)
-                     (at level 60, right associativity).
                                             
   Lemma reverse_involutive {A B : Type} (tr : fingertree A) :
     forall fn, (forall x, fn (fn x) = x) ->
@@ -1006,18 +1099,35 @@ Module FingerTrees.
       + intros. destruct x; simpl; rewrite !H; reflexivity.
   Qed.
 
-  Lemma reverse_rev_ft {A B : Type} (tr : fingertree A) :
-    forall acc (op : A -> list B -> list B),
-      (forall x, op x [] = [x]) ->
-      (forall x xs, op x xs = cons x xs) ->
-    rev (reducer (fun x b => to_list x ++ b) tr []) ++ acc = reducer op (reverse tr) acc.
+  Lemma reverse_rev_ft' {A B : Type} (tr : fingertree A) :
+    forall acc fn (op : A -> list B -> list B), (forall x, fn (fn x) = x) -> 
+              rev (ft_reducer op (tree_map fn tr) []) ++ acc =
+              ft_reducer op (reverse_tree fn tr) acc.
   Proof.
-    induction tr; intros; simpl in *.
+    induction tr; simpl in *; intros.
     - reflexivity.
+    - 
+    - destruct d, d0; simpl in *.
+      + Abort.
+
+  reducer op ([node2 1 2, node2 3 4] empty [])
+  reducer op ([1,2,3,4] empty [])
+    
+    
+    
+
+  Lemma reverse_rev_ft {A B : Type} {F : Type -> Type} {r : reduce F}
+       {r2 : reduce (fun (X : Type) => X)} (tr : fingertree B) :
+    forall acc (pf:B = F A),
+      rev (ft_reducer (fun x b => to_list x ++ b) tr []) ++ acc =
+      ft_reducer (fun x b => to_list x ++ b) (reverse_simple tr) acc.
+  Proof.
+    remember (fun x b => to_list x ++ b) as op. induction tr; intros; simpl in *.
+    - reflexivity.
+    - rewrite Heqop. rewrite app_nil_r.
     - rewrite H. simpl. rewrite H0. reflexivity.
     - destruct d, d0; simpl in *.
       + rewrite !H0. simpl. specialize (IHtr acc (nd_reducer op)).
-    
 
   Lemma reverse_rev_ft {A : Type} (n : nat) (tr : fingertree (node_lift n A)) :
     forall (acc acc' : list A),
@@ -1066,7 +1176,7 @@ Module FingerTrees.
   Theorem tree_reverse_idem {A : Type} ...
 
    
-
+    
         
   
       
