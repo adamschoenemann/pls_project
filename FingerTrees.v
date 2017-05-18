@@ -910,7 +910,6 @@ Module FingerTrees.
        (forall (n:nat) (A : Type) (d : digit (node_lift n A))
           (f1 : fingertree (node_lift (S n) A)),
            P (S n) A f1 -> forall d0 : digit (node_lift n A), P n A (deep d f1 d0)) ->
-       (forall (n:nat) (A : Type) tr, P n (node A) tr <-> P (S n) A (node_lift_tr n tr)) ->
        forall (n:nat) (A : Type) (f2 : fingertree (node_lift n A)), P n A f2.
   (* Proof. *)
   (*   induction n. *)
@@ -1057,22 +1056,21 @@ Module FingerTrees.
       + intros. destruct x; simpl; rewrite !H; reflexivity.
   Qed.
 
-  Lemma reverse_rev_ft {A B : Type} {F : Type -> Type} {r : reduce F}
-       {r2 : reduce (fun (X : Type) => X)} (tr : fingertree B) :
-    forall acc (pf:B = F A),
-      rev (ft_reducer (fun x b => to_list x ++ b) tr []) ++ acc =
-      ft_reducer (fun x b => to_list x ++ b) (reverse_simple tr) acc.
-  Proof.
-    remember (fun x b => to_list x ++ b) as op. induction tr; intros; simpl in *.
-    - reflexivity.
-    - rewrite Heqop. rewrite app_nil_r.
-    - rewrite H. simpl. rewrite H0. reflexivity.
-    - destruct d, d0; simpl in *.
-      + rewrite !H0. simpl. specialize (IHtr acc (nd_reducer op)).
+  (** Helper lemma *)
+  Lemma nd_reducer_cons_app {A:Type} : forall (a1 : node A) (xs ys : list A),
+      nd_reducer cons a1 (xs ++ ys) = nd_reducer cons a1 xs ++ ys.
+  Proof. destruct a1; reflexivity. Qed.
 
+  (**
+     Proof of
+     [rev acc' ++ reducer cons (reverse tr) acc =
+     rev (reducer cons tr acc') ++ acc]
+     but lifted [n] times into [node].
+     Uses the custom induction principle.
+   *)
   Lemma reverse_rev_ft {A : Type} (n : nat) (tr : fingertree (node_lift n A)) :
     forall (acc acc' : list A),
-      (rev acc') ++ ft_reducer (nd_red_lift n cons) (reverse_tree (rev_lift n ident) tr) acc =
+      rev acc' ++ ft_reducer (nd_red_lift n cons) (reverse_tree (rev_lift n ident) tr) acc =
       rev (ft_reducer (nd_red_lift n cons) tr acc') ++ acc.
   Proof.
     apply fingertree_lift_ind with (f2 := tr); simpl in *.
@@ -1103,7 +1101,12 @@ Module FingerTrees.
         reflexivity.
   Qed.
 
-  Lemma reverse_to_list {A : Type} (tr : fingertree A) :
+  (**
+     Theorem!
+     reversing a (tree converted to a list) is the same as
+     is reversing the tree and then converting it to a list.
+   *)
+  Theorem reverse_to_list {A : Type} (tr : fingertree A) :
     rev (to_list tr) = to_list (reverse tr).
   Proof.
     simpl.
@@ -1113,15 +1116,6 @@ Module FingerTrees.
     rewrite <- H with (tr := tr) (acc := []) (acc' := []).
     reflexivity.
   Qed.
-
-  Theorem tree_reverse_idem {A : Type} ...
-
-   
-    
-        
-  
-      
-
 
 End FingerTrees.
 
