@@ -935,19 +935,7 @@ Module FingerTrees.
   Proof.
     intros. Abort.
 
-  Theorem fingertree_lift_ind
-     : forall P : (forall (A : Type), fingertree A -> Prop),
-       (forall (A : Type), P A empty) ->
-       (forall (n:nat) (A : Type) (a : node_lift n A), P (node_lift n A) (single a)) ->
-       (forall (n:nat) (A : Type) (d : digit (node_lift n A))
-          (f1 : fingertree (node_lift (S n) A)),
-           P (node_lift (S n) A) f1 -> forall d0 : digit (node_lift n A),
-             P (node_lift n A) (deep d f1 d0)) ->
-       forall (n:nat) (A : Type) (f2 : fingertree (node_lift n A)), P (node_lift n A) f2.
-  Proof.
-    intros. Admitted.
-
-  Theorem fingertree_lift_ind'
+  Axiom fingertree_lift_ind
      : forall P : (forall (n : nat) (A : Type), fingertree (node_lift n A) -> Prop),
        (forall (n:nat) (A : Type), P n A empty) ->
        (forall (n:nat) (A : Type) (a : node_lift n A), P n A (single a)) ->
@@ -956,14 +944,14 @@ Module FingerTrees.
            P (S n) A f1 -> forall d0 : digit (node_lift n A), P n A (deep d f1 d0)) ->
        (forall (n:nat) (A : Type) tr, P n (node A) tr <-> P (S n) A (node_lift_tr n tr)) ->
        forall (n:nat) (A : Type) (f2 : fingertree (node_lift n A)), P n A f2.
-  Proof.
-    induction n.
-    - intros. simpl in *. induction f2.
-      + apply H.
-      + apply H0.
-      + apply H1. specialize (H2 0 A). unfold node_lift_tr in H2. simpl in H2.
-        destruct (H2 f2). apply (H3 IHf2).
-    - intros. simpl in *. revert f2. Admitted.
+  (* Proof. *)
+  (*   induction n. *)
+  (*   - intros. simpl in *. induction f2. *)
+  (*     + apply H. *)
+  (*     + apply H0. *)
+  (*     + apply H1. specialize (H2 0 A). unfold node_lift_tr in H2. simpl in H2. *)
+  (*       destruct (H2 f2). apply (H3 IHf2). *)
+  (*   - intros. simpl in *. revert f2. Admitted. *)
 
 
   Lemma rev_rev_app_distr : forall {A} (xs ys : list A), rev xs ++ ys = rev (rev ys ++ xs).
