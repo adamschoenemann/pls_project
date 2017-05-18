@@ -898,15 +898,11 @@ Module FingerTrees.
     simpl in *. rewrite node_lift_eq in tr. assumption.
   Defined.
 
-  Definition node_lift_JMeq {A : Type} : JMeq (node_lift 1 A) (node A) :=
-    JMeq_refl.
-
-  Lemma P_node_lift {A : Type} :
-    forall (P : forall (n : nat) (A : Type), fingertree (node_lift n A) -> Prop)
-      (n : nat) tr, JMeq (P n (node A) tr) (P (S n) A (node_lift_tr n tr)).
-  Proof.
-    intros. Abort.
-
+  (** A new induction principle for fingertrees whose types are described in terms of
+      a type [A] lifted [n] times into [node].
+      We cannot prove it, regrettably, because Coq chokes in the induction hypothesis,
+      but we *think* it's consistent.
+   *)
   Axiom fingertree_lift_ind
      : forall P : (forall (n : nat) (A : Type), fingertree (node_lift n A) -> Prop),
        (forall (n:nat) (A : Type), P n A empty) ->
@@ -925,20 +921,10 @@ Module FingerTrees.
   (*       destruct (H2 f2). apply (H3 IHf2). *)
   (*   - intros. simpl in *. revert f2. Admitted. *)
 
-
-  Lemma rev_rev_app_distr : forall {A} (xs ys : list A), rev xs ++ ys = rev (rev ys ++ xs).
-  Proof.
-    induction xs; intros; simpl in *.
-    - rewrite app_nil_r. symmetry. apply rev_involutive.
-    - rewrite IHxs. simpl. destruct ys.
-      + simpl. rewrite app_nil_r. reflexivity.
-      + simpl. rewrite ?IHxs. rewrite rev_app_distr. simpl.
-        rewrite rev_app_distr. simpl.  rewrite rev_app_distr. simpl.
-        rewrite rev_involutive. reflexivity.
-  Qed.
-
+  (** the identity function *)
   Definition ident {A:Type} (x:A) :=  x.
 
+  (** nd_red_lift on cons distributes over append in the accumulator. *)
   Lemma nd_red_lift_app {A:Type} (n : nat) (x y : node_lift n A) :
     forall acc1 acc2,
       nd_red_lift n cons x acc1 ++ nd_red_lift n cons y acc2 =
@@ -949,6 +935,7 @@ Module FingerTrees.
     - destruct x, y; simpl in *; rewrite ?IHn; reflexivity.
   Qed.
 
+  (** same as above, but specialized to empty lists *)
   Lemma nd_red_lift_app' {A:Type} (n : nat) (x y : node_lift n A) :
     forall acc, 
       nd_red_lift n cons x [] ++ nd_red_lift n cons y acc =
@@ -957,6 +944,7 @@ Module FingerTrees.
     apply nd_red_lift_app with (acc1 := []).
   Qed.
 
+  (** same as above, but specialized to a single nd_red_lift *)
   Lemma nd_red_lift_app'' {A:Type} (n : nat) (x : node_lift n A) :
     forall xs ys, 
       nd_red_lift n cons x xs ++ ys =
@@ -968,12 +956,26 @@ Module FingerTrees.
         rewrite !IHn; reflexivity.
   Qed.
 
+  (** specialize above *)
   Lemma nd_red_lift_app''' {A:Type} (n : nat) (x : node_lift n A) :
     forall ys, 
       nd_red_lift n cons x [] ++ ys =
       nd_red_lift n cons x ys.
   Proof.
+    apply nd_red_lift_app''.
+  Qed.
 
+  (**
+     Proof of [reducer cons (reverse_node x) acc = rev (reducer cons x []) ++ acc],
+     but lifted [n] times into [node].
+   *)
+  Lemma nd_red_lift_rev {A : Type} (n : nat) (x : node_lift n A) :
+    forall acc,
+    nd_red_lift n cons (rev_lift n ident x) acc =
+    rev (nd_red_lift n cons x []) ++ acc.
+  Proof.
+    induction n; intros; simpl in *.
+    - unfold ident. reflexivity.
     - destruct x; simpl in *.
       + rewrite !IHn. rewrite app_assoc. rewrite <- rev_app_distr.
         rewrite nd_red_lift_app'''. reflexivity.
@@ -981,7 +983,12 @@ Module FingerTrees.
         rewrite !nd_red_lift_app'''. reflexivity.
   Qed.
 
-
+  (**
+     Proof of 
+     [rev acc' ++ reducer cons (reverse_node nd) acc =
+     rev (reducer cons nd acc') ++ acc]
+     but lifted to node n times
+   *)
   Lemma rev_node_lem {A : Type} (n : nat) (nd : node (node_lift n A)) :
     forall (acc acc' : list A) ,
       (rev acc') ++ reducer (nd_red_lift n cons) (reverse_node (rev_lift n ident) nd) acc =
@@ -1023,8 +1030,9 @@ Module FingerTrees.
              reflexivity.
   Qed.
 
+  (** Same as above, just with digits instead *)
   Lemma reverse_rev_digit {A : Type} (n : nat) (d : digit (node_lift n A)) :
-    forall (acc acc' : list A) ,
+    forall (acc acc' : list A),
       (rev acc') ++ digit_reducer (nd_red_lift n cons) (reverse_digit (rev_lift n ident) d) acc =
       rev (digit_reducer (nd_red_lift n cons) d acc') ++ acc.
   Proof.
@@ -1033,8 +1041,11 @@ Module FingerTrees.
     destruct d; intros; simpl in *; rewrite !rev_node_lem; reflexivity.
   Qed.
 
-                                            
-  Lemma reverse_involutive {A B : Type} (tr : fingertree A) :
+  (**
+     Theorem!
+     Reversing a tree twice gives you an equivalent tree
+   *)
+  Theorem reverse_involutive {A B : Type} (tr : fingertree A) :
     forall fn, (forall x, fn (fn x) = x) ->
           (reverse_tree fn (reverse_tree fn tr)) >=< tr.
   Proof.
@@ -1045,23 +1056,6 @@ Module FingerTrees.
           rewrite !H; reflexivity.
       + intros. destruct x; simpl; rewrite !H; reflexivity.
   Qed.
-
-  Lemma reverse_rev_ft' {A B : Type} (tr : fingertree A) :
-    forall acc fn (op : A -> list B -> list B), (forall x, fn (fn x) = x) -> 
-              rev (ft_reducer op (ft_map fn tr) []) ++ acc =
-              ft_reducer op (reverse_tree fn tr) acc.
-  Proof.
-    induction tr; simpl in *; intros.
-    - reflexivity.
-    - 
-    - destruct d, d0; simpl in *.
-      + Abort.
-
-  reducer op ([node2 1 2, node2 3 4] empty [])
-  reducer op ([1,2,3,4] empty [])
-    
-    
-    
 
   Lemma reverse_rev_ft {A B : Type} {F : Type -> Type} {r : reduce F}
        {r2 : reduce (fun (X : Type) => X)} (tr : fingertree B) :
