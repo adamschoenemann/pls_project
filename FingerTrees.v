@@ -4,6 +4,7 @@ Require Import Coq.omega.Omega.
 Require Import Coq.Lists.List.
 Require Import Basics.   
 Require Import Logic.JMeq.
+Require Import Coq.Logic.FunctionalExtensionality.
 
 Module FingerTrees.
 
@@ -758,7 +759,66 @@ Module FingerTrees.
     destruct d, d0; simpl; try (rewrite IHtr); try reflexivity.
   Qed.
 
-  Lemma reverse_addl {A : Type} (tr : fingertree A) :
+  Lemma node_map_id {A: Type}(n: node A):
+    forall fn, (forall x, fn x = x) ->
+    node_map fn n = n.
+  Proof.
+    intros. destruct n; simpl; rewrite !H; reflexivity.
+  Qed.
+
+  Lemma digit_map_id{A: Type}(d: digit A):
+    forall fn, (forall x, fn x = x) ->
+     digit_map fn d = d.
+  Proof.
+    intros. destruct d; simpl; rewrite !H; reflexivity.     
+  Qed.
+  
+Lemma map_id{A: Type}(tr : fingertree A) :
+    forall fn, (forall x, fn x = x) ->
+    tree_map fn tr = tr.
+    Proof.                                          
+      induction tr. intros.
+      - simpl. reflexivity.
+      - intros. simpl in *. rewrite H. reflexivity.
+      - intros. simpl in *. rewrite !digit_map_id. rewrite IHtr. reflexivity.
+        + intros. apply node_map_id. assumption.
+        + assumption.
+        + assumption.
+    Qed.
+(* Map Composition *)
+Lemma digit_map_comp{A B C: Type}(d: digit A): 
+   forall (fn: B -> C) (gn: A -> B),
+    digit_map (fun x : A => fn (gn x)) d = digit_map fn (digit_map gn d).
+Proof.
+  intros. destruct d; simpl;reflexivity.
+Qed.
+
+Lemma node_map_comp{A B C: Type}(n: node A):
+  forall (f: B -> C) (g: A -> B),
+    node_map (fun x : A => f  (g x)) n = node_map f(node_map g n).
+Proof.
+  intros. destruct n; simpl; reflexivity.
+Qed.
+
+
+
+
+Lemma map_comp{A B C: Type} (tr: fingertree A):
+  forall (f: B -> C)  (g: A -> B), tree_map (fun x => f (g x)) tr = tree_map f (tree_map g tr).
+  Proof.          
+    intros. generalize dependent B. generalize dependent C. induction tr. intros.
+    - simpl in *. reflexivity.
+    - intros. simpl in *. reflexivity.
+    - intros. simpl. rewrite (digit_map_comp d). rewrite (digit_map_comp d0).
+      replace (node_map (fun x : A => f (g x))) with (fun n : node A => node_map f (node_map g n)).
+      specialize (IHtr _ _ (node_map f) (node_map g)).
+      rewrite IHtr. reflexivity.
+      apply functional_extensionality.
+      intros. rewrite <- node_map_comp. reflexivity.
+  Qed.
+
+  
+Lemma reverse_addl {A : Type} (tr : fingertree A) :
     forall x fn, reverse_tree fn (x <| tr) = reverse_tree fn tr |> fn x.
   Proof.
     unfold reverse. induction tr; simpl in *; intros; try reflexivity.
@@ -766,7 +826,7 @@ Module FingerTrees.
     simpl in *. rewrite IHtr. reflexivity.
   Qed.
 
-  Compute (reducel (flip cons) [] [1;2;3]).
+  Compute (reducel (flip cons) [] [1;2;3])
 
   Definition red_cons {A : Type} {F : Type -> Type} {r:reduce F} (x:F A) (xs:list A) :
     list A := to_list x ++ xs.
@@ -915,20 +975,7 @@ Module FingerTrees.
       nd_red_lift n cons x [] ++ ys =
       nd_red_lift n cons x ys.
   Proof.
-    apply nd_red_lift_app''.
-  Qed.
 
-  Lemma nd_reducer_cons_app {A:Type} : forall (a1 : node A) (xs ys : list A),
-      nd_reducer cons a1 (xs ++ ys) = nd_reducer cons a1 xs ++ ys.
-  Proof. destruct a1; reflexivity. Qed.
-
-  Lemma nd_red_lift_rev {A : Type} (n : nat) (x : node_lift n A) :
-    forall acc,
-    nd_red_lift n cons (rev_lift n ident x) acc =
-    rev (nd_red_lift n cons x []) ++ acc.
-  Proof.
-    induction n; intros; simpl in *.
-    - unfold ident. reflexivity.
     - destruct x; simpl in *.
       + rewrite !IHn. rewrite app_assoc. rewrite <- rev_app_distr.
         rewrite nd_red_lift_app'''. reflexivity.
