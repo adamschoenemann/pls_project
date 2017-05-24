@@ -812,7 +812,7 @@ Module FingerTrees.
   (** ============================================================================== *)
 
   (** You can reverse a node *)
-  Fixpoint reverse_node {A: Type}
+  Definition reverse_node {A: Type}
             (f: A -> A) (n: node A): node A  :=
     match n with
     | (node2  a b)  => node2 (f b) (f a)
@@ -820,7 +820,7 @@ Module FingerTrees.
     end.
 
   (** You can reverse a digit *)
-  Fixpoint reverse_digit {A: Type}
+  Definition reverse_digit {A: Type}
            (f: A -> A) (d: digit A): digit A  :=
     match d with
     | one a        => one (f a)
