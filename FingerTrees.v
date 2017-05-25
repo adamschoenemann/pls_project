@@ -18,7 +18,7 @@ Module FingerTrees.
   Class functor F := Functor {
     map : forall {A B : Type}, (A -> B) -> F A -> F B;
 
-    map_id : forall {A : Type} fn (f : F A), (forall x, fn x = x) -> map fn f = f;
+    map_id : forall {A : Type} (f : F A), map (fun x => x) f = f;
     map_comp : forall {A B C : Type} (f : B -> C) (g : A -> B) (x : F A),
         map (fun x => f (g x)) x = (fun x => map f (map g x)) x;
   }.
@@ -128,8 +128,8 @@ Module FingerTrees.
       map := @nd_map
     |}.
   Proof.
-    - intros. destruct f; simpl; rewrite !H; reflexivity.
-    - intros. destruct x; simpl; reflexivity.
+    - intros. destruct f; reflexivity.
+    - intros. destruct x; reflexivity.
   Defined.
 
   (** Digits can be reduced right *)
@@ -171,8 +171,8 @@ Module FingerTrees.
       map := @digit_map;
     |}.
   Proof.
-    - intros. destruct f; simpl; rewrite !H; reflexivity.
-    - intros. destruct x; simpl; reflexivity.
+    - intros. destruct f; reflexivity.
+    - intros. destruct x; reflexivity.
   Defined.
 
   (** Fingertrees can be reduced right *)
@@ -222,13 +222,15 @@ Module FingerTrees.
     end.
 
   (** ID law for functors for fingertrees *)
-  Lemma ft_map_id : forall (A : Type) (fn : A -> A) (tr : fingertree A),
-  (forall x : A, fn x = x) -> ft_map fn tr = tr.
+  Lemma ft_map_id : forall (A : Type) (tr : fingertree A),
+   ft_map (fun x => x) tr = tr.
   Proof.
     Opaque map.
-    induction tr; intros; simpl in *; [reflexivity | rewrite H; reflexivity |].
-    rewrite !map_id; [| assumption | assumption]. rewrite IHtr. reflexivity.
-    intros. apply map_id. assumption.
+    induction tr; intros; simpl in *; [reflexivity | reflexivity |].
+    rewrite !map_id.
+    replace (map (fun x : A => x)) with (fun x : node A => x).
+    rewrite IHtr. reflexivity.
+    apply functional_extensionality. intros. symmetry. apply map_id.
     Transparent map.
   Qed.
 
