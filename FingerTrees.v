@@ -792,7 +792,7 @@ Module FingerTrees.
   Qed.
 
   (** Same as above, but with to_list *)
-  Theorem tree_append_assoc_to_list :
+  Corollary tree_append_assoc_to_list :
     forall {A B : Type} (tr1 tr2 tr3 : fingertree A),
       to_list (tr1 >< (tr2 >< tr3)) = to_list ((tr1 >< tr2) >< tr3).
   Proof.
@@ -800,7 +800,7 @@ Module FingerTrees.
   Qed.
 
   (** Same as above, but with sums *)
-  Theorem tree_append_assoc_sum :
+  Corollary tree_append_assoc_sum :
     forall {A : Type} (tr1 tr2 tr3 : fingertree nat),
       reducer plus (tr1 >< (tr2 >< tr3)) 0 = reducer plus ((tr1 >< tr2) >< tr3) 0.
   Proof.
