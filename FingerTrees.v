@@ -6,7 +6,7 @@ Require Import Basics.
 Require Import Logic.JMeq.
 Require Import Coq.Logic.FunctionalExtensionality.
 
-(** Module defining fingertrees *)
+(** Module defining fingertrees ala Hinze and Paterson and verifying them*)
 
 Module FingerTrees.
 
